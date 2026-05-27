@@ -10,6 +10,63 @@ import {
 } from 'lucide-react';
 import { animate } from 'animejs';
 
+const PARROQUIAS_POR_MUNICIPIO: { [key: string]: string[] } = {
+  Girardot: [
+    'José Casanova Godoy',
+    'Las Delicias',
+    'Madre María de San José',
+    'Joaquín Crespo',
+    'Pedro José Ovalle',
+    'Andrés Eloy Blanco',
+    'Choroní',
+    'Florencio Jiménez'
+  ],
+  'Santiago Mariño': [
+    'Turmero',
+    'Samán de Güere',
+    'Alfredo Pacheco Miranda',
+    'Pedro Arévalo Aponte',
+    'Chuao'
+  ],
+  'Mario Briceño Iragorry': [
+    'El Limón',
+    'Caña de Azúcar'
+  ],
+  'José Félix Ribas': [
+    'Juan Vicente Bolívar y Ponte',
+    'Castor Nieves Ríos',
+    'Zuata',
+    'Pao de Zárate',
+    'Guacamaya'
+  ],
+  'Francisco Linares Alcántara': [
+    'Santa Rita',
+    'Francisco de Miranda',
+    'Monseñor Feliciano González'
+  ],
+  Sucre: [
+    'Cagua',
+    'Bella Vista'
+  ],
+  Libertador: [
+    'Palo Negro',
+    'San Martín de Porres'
+  ],
+  Lamas: [
+    'Santa Cruz'
+  ],
+  Zamora: [
+    'Villa de Cura',
+    'San Francisco de Asís',
+    'Magdalena',
+    'Tocorón',
+    'Augusto Mijares'
+  ],
+  Tovar: [
+    'Colonia Tovar'
+  ]
+};
+
 interface MesaInfo {
   id: string;
   numero: number;
@@ -80,6 +137,18 @@ export default function RegistroPage() {
   const [foundGuest, setFoundGuest] = useState<AsistenteInfo | null>(null);
   const [showMesaSelection, setShowMesaSelection] = useState(false);
   const [selectedMesaIds, setSelectedMesaIds] = useState<string[]>([]);
+  const [isRegisteringNewGuest, setIsRegisteringNewGuest] = useState(false);
+  const [nuevoGuest, setNuevoGuest] = useState({
+    nombre: '',
+    cedula: '',
+    telefono: '',
+    condominio: '',
+    municipio: 'Girardot',
+    parroquia: 'José Casanova Godoy',
+    es_acompanante: false,
+    es_directivo: false,
+    cargo_directivo: '',
+  });
   
   // Companions state
   const [hasCompanions, setHasCompanions] = useState(false);
@@ -143,7 +212,7 @@ export default function RegistroPage() {
       if (searchError) throw searchError;
 
       if (!guests || guests.length === 0) {
-        setErrorMsg('Esta cédula no se encuentra registrada en la lista oficial de invitados.');
+        setErrorMsg('Esta cédula no se encuentra registrada en la lista oficial de invitados. ¿Deseas registrarla ahora?');
         setLoading(false);
         return;
       }
@@ -468,14 +537,355 @@ _Nota: Número para solo envío de mensajería masiva - No recibe respuestas_`;
           </button>
 
           {errorMsg && (
-            <div className="p-4 bg-red-950/20 border border-red-900/50 text-red-200 rounded-xl flex items-start gap-3">
-              <AlertCircle className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
-              <div className="text-sm">
-                <span className="font-bold block">Participante no encontrado</span>
-                <span>{errorMsg}</span>
+            <div className="space-y-4">
+              <div className="p-4 bg-red-950/20 border border-red-900/50 text-red-200 rounded-xl flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
+                <div className="text-sm">
+                  <span className="font-bold block">Participante no encontrado</span>
+                  <span>{errorMsg}</span>
+                </div>
               </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setNuevoGuest({
+                    nombre: '',
+                    cedula: cleanCedula(cedula),
+                    telefono: '',
+                    condominio: '',
+                    municipio: 'Girardot',
+                    parroquia: 'José Casanova Godoy',
+                    es_acompanante: false,
+                    es_directivo: false,
+                    cargo_directivo: '',
+                  });
+                  setSelectedMesaIds([]);
+                  setIsRegisteringNewGuest(true);
+                  setErrorMsg('');
+                }}
+                className="w-full py-3 bg-[#111a2e] border border-[#60c0ea]/40 hover:border-[#60c0ea] text-[#60c0ea] hover:text-white font-bold rounded-xl transition-all text-sm"
+              >
+                + Registrar nuevo invitado e iniciar asistencia
+              </button>
             </div>
           )}
+        </form>
+      )}
+
+      {/* Registro de Nuevo Invitado */}
+      {isRegisteringNewGuest && (
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (!nuevoGuest.nombre || !nuevoGuest.cedula || !nuevoGuest.telefono || !nuevoGuest.condominio) {
+              setErrorMsg('Todos los campos obligatorios deben completarse.');
+              return;
+            }
+            if (selectedMesaIds.length === 0) {
+              setErrorMsg('Debe seleccionar al menos una mesa de trabajo.');
+              return;
+            }
+            setLoading(true);
+            setErrorMsg('');
+            try {
+              const payload = {
+                nombre: nuevoGuest.nombre,
+                cedula: cleanCedula(nuevoGuest.cedula),
+                telefono: cleanTelefono(nuevoGuest.telefono),
+                condominio: nuevoGuest.condominio,
+                municipio: nuevoGuest.municipio,
+                parroquia: nuevoGuest.parroquia,
+                es_acompanante: nuevoGuest.es_acompanante,
+                es_directivo: nuevoGuest.es_acompanante ? nuevoGuest.es_directivo : false,
+                cargo_directivo: (nuevoGuest.es_acompanante && nuevoGuest.es_directivo) ? nuevoGuest.cargo_directivo : null,
+                asistio: true,
+                fecha_registro: new Date().toISOString(),
+              };
+
+              const { data: insertedData, error: insertError } = await supabase
+                .from('asistentes')
+                .insert([payload])
+                .select('id');
+
+              if (insertError) throw insertError;
+              if (!insertedData || insertedData.length === 0) throw new Error('No se pudo recuperar el ID del nuevo asistente.');
+
+              const newId = insertedData[0].id;
+
+              const relations = selectedMesaIds.map(mesaId => ({
+                asistente_id: newId,
+                mesa_id: mesaId
+              }));
+              const { error: relError } = await supabase
+                .from('asistente_mesa')
+                .insert(relations);
+              if (relError) throw relError;
+
+              // WhatsApp message format and dispatch
+              const selectedMesasData = mesas.filter(m => selectedMesaIds.includes(m.id));
+              const mesasString = selectedMesasData.map(m => m.nombre).join(', ');
+              setMesaAsignadaText(mesasString);
+
+              const guestInfoFormatted: AsistenteInfo = {
+                id: newId,
+                nombre: nuevoGuest.nombre,
+                cedula: cleanCedula(nuevoGuest.cedula),
+                telefono: cleanTelefono(nuevoGuest.telefono),
+                condominio: nuevoGuest.condominio,
+                municipio: nuevoGuest.municipio,
+                parroquia: nuevoGuest.parroquia,
+                asistio: true,
+                es_acompanante: nuevoGuest.es_acompanante,
+                es_directivo: nuevoGuest.es_acompanante ? nuevoGuest.es_directivo : false,
+                cargo_directivo: nuevoGuest.cargo_directivo,
+                mesas_preasignadas: selectedMesasData,
+              };
+
+              setAsistenteInfo(guestInfoFormatted);
+              setIsRegisteringNewGuest(false);
+              setRegistrado(true);
+
+              if (guestInfoFormatted.telefono) {
+                const mesasStringWA = selectedMesasData.map(m => `*${m.nombre}*`).join('\n');
+                const customMessage = `Hola, *${guestInfoFormatted.nombre}*;
+
+Bienvenido a la *MESA DE LOS SERVICIOS PÚBLICOS CONDOMINIALES DEL MUNICIPIO GIRARDOT*
+
+En nombre de nuestra Gobernadora Joana Sánchez queremos darte la cordial bienvenida. 
+
+📌 Has sido asignado a:
+${mesasStringWA}
+
+Tu participación en representación de la comunidad *${guestInfoFormatted.condominio}* es sumamente valiosa para nosotros.
+
+Sin duda alguna, ¡Aragua nos une, y siempre nos vamos a encontrar! Eres Gente de Bien, HACIÉNDOLO BIEN! 🚀
+
+_Nota: Número para solo envío de mensajería masiva - No recibe respuestas_`;
+
+                setWaStatus({ success: false, msg: 'Enviando mensaje de confirmación al presidente...' });
+                const waResult = await evolutionService.sendWhatsAppMessage(guestInfoFormatted.telefono, customMessage);
+
+                if (waResult.success) {
+                  setWaStatus({ success: true, msg: 'Mensaje de WhatsApp enviado con éxito' });
+                  await supabase
+                    .from('asistentes')
+                    .update({ whatsapp_status: 'enviado' })
+                    .eq('id', newId);
+                } else {
+                  setWaStatus({ success: false, msg: `No se pudo enviar el WhatsApp: ${waResult.error}` });
+                  await supabase
+                    .from('asistentes')
+                    .update({ 
+                      whatsapp_status: 'error',
+                      whatsapp_error: waResult.error
+                    })
+                    .eq('id', newId);
+                }
+              }
+            } catch (err) {
+              console.error(err);
+              const errorObj = err as Error;
+              setErrorMsg(errorObj.message || 'Error al registrar al asistente.');
+            } finally {
+              setLoading(false);
+            }
+          }}
+          className="bg-[#111a2e] border border-[#1e2d4a] rounded-2xl p-6 shadow-xl space-y-6 animate-slide-up"
+        >
+          {/* Header */}
+          <div className="border-b border-[#1e2d4a] pb-4">
+            <span className="text-xs font-semibold text-[#60c0ea] uppercase tracking-wider block">Registrar Invitado Inexistente</span>
+            <h2 className="text-xl font-bold text-white mt-1">Nuevo Registro y Asistencia</h2>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Nombre Completo *</label>
+              <input
+                type="text"
+                required
+                value={nuevoGuest.nombre}
+                onChange={e => setNuevoGuest({ ...nuevoGuest, nombre: e.target.value })}
+                className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#60c0ea]"
+                placeholder="Nombre del asistente"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Cédula de Identidad *</label>
+              <input
+                type="text"
+                required
+                disabled
+                value={nuevoGuest.cedula}
+                className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-gray-400 text-sm focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Teléfono (WhatsApp) *</label>
+              <input
+                type="text"
+                required
+                value={nuevoGuest.telefono}
+                onChange={e => setNuevoGuest({ ...nuevoGuest, telefono: e.target.value })}
+                className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#60c0ea]"
+                placeholder="Ej. 04141234567"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Nombre del Condominio *</label>
+              <input
+                type="text"
+                required
+                value={nuevoGuest.condominio}
+                onChange={e => setNuevoGuest({ ...nuevoGuest, condominio: e.target.value })}
+                className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#60c0ea]"
+                placeholder="Ej. Condominio El Paraíso"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Municipio *</label>
+              <select
+                value={nuevoGuest.municipio}
+                onChange={e => {
+                  const newMuni = e.target.value;
+                  const defaultParroquia = PARROQUIAS_POR_MUNICIPIO[newMuni]?.[0] || '';
+                  setNuevoGuest({ 
+                    ...nuevoGuest, 
+                    municipio: newMuni,
+                    parroquia: defaultParroquia
+                  });
+                }}
+                className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#60c0ea]"
+              >
+                {Object.keys(PARROQUIAS_POR_MUNICIPIO).map(muni => (
+                  <option key={muni} value={muni}>{muni}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Parroquia *</label>
+              <select
+                value={nuevoGuest.parroquia}
+                onChange={e => setNuevoGuest({ ...nuevoGuest, parroquia: e.target.value })}
+                className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#60c0ea]"
+              >
+                {(PARROQUIAS_POR_MUNICIPIO[nuevoGuest.municipio] || []).map(p => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Opción de Acompañante / Directivo */}
+          <div className="space-y-3 pt-2 border-t border-[#1e2d4a]">
+            <label className="flex items-center gap-2 text-sm text-gray-300 hover:text-white cursor-pointer">
+              <input
+                type="checkbox"
+                checked={nuevoGuest.es_acompanante}
+                onChange={e => setNuevoGuest({ 
+                  ...nuevoGuest, 
+                  es_acompanante: e.target.checked,
+                  es_directivo: e.target.checked ? nuevoGuest.es_directivo : false,
+                  cargo_directivo: e.target.checked ? nuevoGuest.cargo_directivo : ''
+                })}
+                className="rounded border-[#1e2d4a] bg-[#111a2e] text-[#60c0ea] focus:ring-0 focus:ring-offset-0"
+              />
+              <span>¿Es Acompañante? (Invitado)</span>
+            </label>
+
+            {nuevoGuest.es_acompanante && (
+              <div className="pl-6 space-y-3 border-l-2 border-[#1e2d4a] animate-slide-up">
+                <label className="flex items-center gap-2 text-sm text-gray-300 hover:text-white cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={nuevoGuest.es_directivo}
+                    onChange={e => setNuevoGuest({ 
+                      ...nuevoGuest, 
+                      es_directivo: e.target.checked,
+                      cargo_directivo: e.target.checked ? nuevoGuest.cargo_directivo : ''
+                    })}
+                    className="rounded border-[#1e2d4a] bg-[#111a2e] text-[#60c0ea] focus:ring-0 focus:ring-offset-0"
+                  />
+                  <span>¿Es Directivo del Condominio?</span>
+                </label>
+
+                {nuevoGuest.es_directivo && (
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Cargo Directivo *</label>
+                    <input
+                      type="text"
+                      required
+                      value={nuevoGuest.cargo_directivo}
+                      onChange={e => setNuevoGuest({ ...nuevoGuest, cargo_directivo: e.target.value })}
+                      className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#60c0ea]"
+                      placeholder="Ej. Vocal, Tesorero, etc."
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Mesas */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Asignar Mesa de Trabajo *</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-[#1a2640] p-4 rounded-xl border border-[#1e2d4a] max-h-48 overflow-y-auto">
+              {mesas.map(m => {
+                const isChecked = selectedMesaIds.includes(m.id);
+                return (
+                  <label key={m.id} className="flex items-center gap-3 text-xs text-gray-300 hover:text-white cursor-pointer py-1 px-2 rounded hover:bg-[#111a2e] transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => {
+                        if (isChecked) {
+                          setSelectedMesaIds(selectedMesaIds.filter(id => id !== m.id));
+                        } else {
+                          setSelectedMesaIds([...selectedMesaIds, m.id]);
+                        }
+                      }}
+                      className="rounded border-[#1e2d4a] bg-[#111a2e] text-[#60c0ea] focus:ring-0 focus:ring-offset-0"
+                    />
+                    <span>{m.nombre}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          {errorMsg && (
+            <div className="p-3 bg-red-950/20 border border-red-900/50 text-red-200 rounded-xl flex items-start gap-2.5 text-xs">
+              <AlertCircle className="h-4.5 w-4.5 text-red-400 shrink-0 mt-0.5" />
+              <span>{errorMsg}</span>
+            </div>
+          )}
+
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setIsRegisteringNewGuest(false);
+                setCedula('');
+                setErrorMsg('');
+              }}
+              className="flex-1 py-3 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold rounded-xl transition-all text-sm"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm flex items-center justify-center gap-1.5"
+            >
+              {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+              {loading ? 'Registrando...' : 'Confirmar Registro'}
+            </button>
+          </div>
         </form>
       )}
 
