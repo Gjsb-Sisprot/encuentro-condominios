@@ -112,24 +112,37 @@ export default function DashboardPage() {
    };
  
    useEffect(() => {
-     fetchData();
-     
-     // Configurar canal de Supabase en tiempo real para actualizaciones inmediatas
-     const channel = supabase
-       .channel('schema-db-changes')
-       .on(
-         'postgres_changes',
-         { event: '*', schema: 'public', table: 'asistentes' },
-         () => {
-           fetchData();
-         }
-       )
-       .subscribe();
- 
-     return () => {
-       supabase.removeChannel(channel);
-     };
-   }, []);
+    fetchData();
+    
+    // Configurar canal de Supabase en tiempo real para asistentes
+    const channelAsistentes = supabase
+      .channel('asistentes-db-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'asistentes' },
+        () => {
+          fetchData();
+        }
+      )
+      .subscribe();
+
+    // Configurar canal de Supabase en tiempo real para asistente_mesa
+    const channelAsistenteMesa = supabase
+      .channel('asistente-mesa-db-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'asistente_mesa' },
+        () => {
+          fetchData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channelAsistentes);
+      supabase.removeChannel(channelAsistenteMesa);
+    };
+  }, []);
  
    // Filter list based on selected category
    const asistentesFiltrados = asistentes.filter(a => {
@@ -206,6 +219,49 @@ export default function DashboardPage() {
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-[#1a2640] border border-[#1e2d4a] text-gray-300 hover:text-white transition-colors"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} /> Sincronizar
+        </button>
+      </div>
+
+      {/* Selector de Filtros */}
+      <div className="flex bg-[#111a2e] border border-[#1e2d4a] rounded-xl p-1 max-w-sm">
+        <button
+          onClick={() => {
+            setFiltro('todos');
+            setSelectedMesaIdForDetail(null);
+          }}
+          className={`flex-1 py-1.5 px-4 rounded-lg font-bold text-xs transition-all ${
+            filtro === 'todos' 
+              ? 'bg-[#f3af30] text-[#0b111e]' 
+              : 'text-gray-400 hover:text-white hover:bg-[#1a2640]/50'
+          }`}
+        >
+          Todos
+        </button>
+        <button
+          onClick={() => {
+            setFiltro('presidentes');
+            setSelectedMesaIdForDetail(null);
+          }}
+          className={`flex-1 py-1.5 px-4 rounded-lg font-bold text-xs transition-all ${
+            filtro === 'presidentes' 
+              ? 'bg-[#60c0ea] text-[#0b111e]' 
+              : 'text-gray-400 hover:text-white hover:bg-[#1a2640]/50'
+          }`}
+        >
+          Presidentes
+        </button>
+        <button
+          onClick={() => {
+            setFiltro('invitados');
+            setSelectedMesaIdForDetail(null);
+          }}
+          className={`flex-1 py-1.5 px-4 rounded-lg font-bold text-xs transition-all ${
+            filtro === 'invitados' 
+              ? 'bg-emerald-500 text-[#0b111e]' 
+              : 'text-gray-400 hover:text-white hover:bg-[#1a2640]/50'
+          }`}
+        >
+          Invitados
         </button>
       </div>
 
