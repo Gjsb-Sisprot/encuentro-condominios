@@ -36,6 +36,14 @@ export default function RegistroPage() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   
+  // Data lists
+  const [mesas, setMesas] = useState<DbMesaResponse[]>([]);
+  
+  // Step workflow states
+  const [foundGuest, setFoundGuest] = useState<AsistenteInfo | null>(null);
+  const [showMesaSelection, setShowMesaSelection] = useState(false);
+  const [selectedMesaId, setSelectedMesaId] = useState<string>('');
+  
   // Registration result states
   const [registrado, setRegistrado] = useState(false);
   const [asistenteInfo, setAsistenteInfo] = useState<AsistenteInfo | null>(null);
@@ -46,19 +54,37 @@ export default function RegistroPage() {
   const cardRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
-  const handleRegister = async (e: React.FormEvent) => {
+  // Fetch mesas on load
+  useEffect(() => {
+    async function fetchMesas() {
+      const { data, error } = await supabase
+        .from('mesas_trabajo')
+        .select('*')
+        .order('numero', { ascending: true });
+      if (data) {
+        setMesas(data as DbMesaResponse[]);
+      }
+      if (error) {
+        console.error('Error fetching mesas:', error);
+      }
+    }
+    fetchMesas();
+  }, []);
+
+  // Search by Cédula
+  const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!cedula.trim()) return;
 
     setLoading(true);
     setErrorMsg('');
     setRegistrado(false);
-    setAsistenteInfo(null);
+    setFoundGuest(null);
+    setShowMesaSelection(false);
     setMesaAsignada(null);
     setWaStatus(null);
 
     try {
-      // 1. Search for guest by Cédula
       const { data: guests, error: searchError } = await supabase
         .from('asistentes')
         .select('*')
@@ -73,80 +99,72 @@ export default function RegistroPage() {
       }
 
       const guest = guests[0] as AsistenteInfo;
-      let mesaId = guest.mesa_preasignada_id;
+      setFoundGuest(guest);
+      setSelectedMesaId(guest.mesa_preasignada_id || '');
+      setShowMesaSelection(true);
+    } catch (error) {
+      console.error(error);
+      setErrorMsg('Error al buscar el participante.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      // 2. Auto assign mesa if not pre-assigned
-      if (!mesaId) {
-        // Query all mesas
-        const { data: dbMesas, error: errorMesas } = await supabase
-          .from('mesas_trabajo')
-          .select('*')
-          .order('numero', { ascending: true });
-        
-        if (errorMesas) throw errorMesas;
+  // Confirm registration and selected mesa
+  const handleConfirmRegistration = async () => {
+    if (!foundGuest || !selectedMesaId) return;
 
-        if (dbMesas && dbMesas.length > 0) {
-          // Default assign to Mesa 1 or rotate
-          const typedMesas = dbMesas as DbMesaResponse[];
-          mesaId = typedMesas[0].id;
-          
-          // Update database with the assigned mesa
-          const { error: updMesaErr } = await supabase
-            .from('asistentes')
-            .update({ mesa_preasignada_id: mesaId })
-            .eq('id', guest.id);
-          
-          if (updMesaErr) console.error('Error auto-assigning mesa:', updMesaErr);
-          guest.mesa_preasignada_id = mesaId;
-        }
-      }
+    setLoading(true);
+    setErrorMsg('');
 
-      // 3. Retrieve assigned mesa info
-      let mesaInfo: MesaInfo | null = null;
-      if (mesaId) {
-        const { data: dbMesa, error: errorMesa } = await supabase
-          .from('mesas_trabajo')
-          .select('numero, nombre')
-          .eq('id', mesaId)
-          .single();
-        if (errorMesa) throw errorMesa;
-        mesaInfo = dbMesa as MesaInfo;
-      }
+    try {
+      const chosenMesa = mesas.find(m => m.id === selectedMesaId);
+      if (!chosenMesa) throw new Error('Mesa seleccionada no válida');
 
-      // 4. Mark attendance
+      // Update db
       const { error: updateError } = await supabase
         .from('asistentes')
         .update({
+          mesa_preasignada_id: selectedMesaId,
           asistio: true,
           fecha_registro: new Date().toISOString(),
         })
-        .eq('id', guest.id);
+        .eq('id', foundGuest.id);
 
       if (updateError) throw updateError;
 
-      setAsistenteInfo(guest);
-      setMesaAsignada(mesaInfo);
+      const updatedGuest = {
+        ...foundGuest,
+        mesa_preasignada_id: selectedMesaId,
+        asistio: true
+      };
+
+      setAsistenteInfo(updatedGuest);
+      setMesaAsignada({
+        numero: chosenMesa.numero,
+        nombre: chosenMesa.nombre
+      });
+      setShowMesaSelection(false);
       setRegistrado(true);
 
-      // 5. Send WhatsApp Message (EvolutionAPI)
-      if (guest.telefono && mesaInfo) {
-        const customMessage = `¡Hola, ${guest.nombre}! Le damos una cordial bienvenida al Primer Encuentro de Condominios. 
-
+      // Send WhatsApp
+      if (updatedGuest.telefono) {
+        const customMessage = `¡Hola, ${updatedGuest.nombre}! Le damos una cordial bienvenida al Primer Encuentro de Condominios. 
+ 
 Ha sido asignado a la: 
-📌 *Mesa ${mesaInfo.numero}: ${mesaInfo.nombre}*
-
-Su participación es fundamental para el desarrollo y bienestar de su comunidad (${guest.condominio}). ¡Nos vemos adentro!`;
+📌 *Mesa ${chosenMesa.numero}: ${chosenMesa.nombre}*
+ 
+Su participación es fundamental para el desarrollo y bienestar de su comunidad (${updatedGuest.condominio}). ¡Nos vemos adentro!`;
 
         setWaStatus({ success: false, msg: 'Enviando mensaje de confirmación...' });
-        
-        const waResult = await evolutionService.sendWhatsAppMessage(guest.telefono, customMessage);
+        const waResult = await evolutionService.sendWhatsAppMessage(updatedGuest.telefono, customMessage);
 
         if (waResult.success) {
           setWaStatus({ success: true, msg: 'Mensaje de WhatsApp enviado con éxito' });
           await supabase
             .from('asistentes')
             .update({ whatsapp_status: 'enviado' })
-            .eq('id', guest.id);
+            .eq('id', updatedGuest.id);
         } else {
           setWaStatus({ success: false, msg: `No se pudo enviar el WhatsApp: ${waResult.error}` });
           await supabase
@@ -155,16 +173,16 @@ Su participación es fundamental para el desarrollo y bienestar de su comunidad 
               whatsapp_status: 'error',
               whatsapp_error: waResult.error
             })
-            .eq('id', guest.id);
+            .eq('id', updatedGuest.id);
         }
       } else {
-        setWaStatus({ success: false, msg: 'No se pudo enviar WhatsApp: Datos incompletos.' });
+        setWaStatus({ success: false, msg: 'No se pudo enviar WhatsApp: Teléfono no disponible.' });
       }
 
     } catch (error) {
       console.error(error);
       const err = error as Error;
-      setErrorMsg(err.message || 'Ocurrió un error inesperado durante el registro.');
+      setErrorMsg(err.message || 'Ocurrió un error durante la confirmación.');
     } finally {
       setLoading(false);
     }
@@ -192,15 +210,15 @@ Su participación es fundamental para el desarrollo y bienestar de su comunidad 
         </div>
         <h1 className="text-3xl font-extrabold text-white">Registro de Asistencia</h1>
         <p className="text-gray-400 text-sm max-w-md mx-auto">
-          Ingresa la Cédula de Identidad del presidente de condominio para registrar su asistencia y enviarle la asignación de mesa por WhatsApp.
+          Ingresa la Cédula de Identidad del presidente de condominio para registrar su asistencia y confirmar la mesa de trabajo en la que participará.
         </p>
       </div>
 
-      {/* Formulario de registro */}
-      {!registrado && (
+      {/* Paso 1: Formulario de búsqueda */}
+      {!registrado && !showMesaSelection && (
         <form 
           ref={formRef}
-          onSubmit={handleRegister} 
+          onSubmit={handleSearch} 
           className="bg-[#111a2e] border border-[#1e2d4a] rounded-2xl p-6 shadow-xl space-y-6 animate-slide-up"
         >
           <div className="space-y-2">
@@ -229,12 +247,12 @@ Su participación es fundamental para el desarrollo y bienestar de su comunidad 
             {loading ? (
               <>
                 <Loader2 className="h-5 w-5 animate-spin" />
-                Validando Asistente...
+                Buscando Participante...
               </>
             ) : (
               <>
-                <CheckCircle2 className="h-5 w-5" />
-                Registrar Asistencia
+                <Search className="h-5 w-5" />
+                Buscar Invitado
               </>
             )}
           </button>
@@ -243,7 +261,7 @@ Su participación es fundamental para el desarrollo y bienestar de su comunidad 
             <div className="p-4 bg-red-950/20 border border-red-900/50 text-red-200 rounded-xl flex items-start gap-3">
               <AlertCircle className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
               <div className="text-sm">
-                <span className="font-bold block">Acceso Denegado</span>
+                <span className="font-bold block">Participante no encontrado</span>
                 <span>{errorMsg}</span>
               </div>
             </div>
@@ -251,14 +269,75 @@ Su participación es fundamental para el desarrollo y bienestar de su comunidad 
         </form>
       )}
 
-      {/* Pantalla de Confirmación de Registro Exitoso */}
+      {/* Paso 2: Selección y Confirmación de Mesa */}
+      {showMesaSelection && foundGuest && (
+        <div className="bg-[#111a2e] border border-[#1e2d4a] rounded-2xl p-6 shadow-xl space-y-6 animate-slide-up">
+          <div className="border-b border-[#1e2d4a] pb-4">
+            <span className="text-xs font-semibold text-[#60c0ea] uppercase tracking-wider block">Verificar Participante</span>
+            <h2 className="text-xl font-bold text-white mt-1">{foundGuest.nombre}</h2>
+            <p className="text-gray-400 text-sm mt-0.5">{foundGuest.condominio} | C.I. {foundGuest.cedula}</p>
+          </div>
+
+          <div className="space-y-5">
+            <div>
+              <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
+                Asignación de Mesa de Trabajo
+              </label>
+              <select
+                value={selectedMesaId}
+                onChange={e => setSelectedMesaId(e.target.value)}
+                className="w-full bg-[#1a2640] border border-[#1e2d4a] text-white rounded-xl px-4 py-3.5 focus:outline-none focus:border-[#60c0ea] focus:ring-1 focus:ring-[#60c0ea] transition-all text-sm"
+              >
+                <option value="" disabled>Seleccione una mesa...</option>
+                {mesas.map(m => (
+                  <option key={m.id} value={m.id}>
+                    Mesa {m.numero}: {m.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {errorMsg && (
+              <div className="p-3 bg-red-950/20 border border-red-900/50 text-red-200 rounded-xl flex items-start gap-2.5 text-xs">
+                <AlertCircle className="h-4.5 w-4.5 text-red-400 shrink-0 mt-0.5" />
+                <span>{errorMsg}</span>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMesaSelection(false);
+                  setFoundGuest(null);
+                  setCedula('');
+                }}
+                className="flex-1 py-3 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold rounded-xl transition-all text-sm"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRegistration}
+                disabled={loading || !selectedMesaId}
+                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm flex items-center justify-center gap-1.5"
+              >
+                {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+                {loading ? 'Registrando...' : 'Confirmar Registro'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Paso 3: Confirmación de Registro Exitoso */}
       {registrado && asistenteInfo && mesaAsignada && (
         <div 
           ref={cardRef}
           className="bg-[#111a2e] border border-emerald-500/30 rounded-2xl p-8 shadow-2xl space-y-6 text-center"
         >
           <div className="inline-flex items-center justify-center h-20 w-20 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 mb-2">
-            <CheckCircle2 className="h-10 w-10 animate-bounce-slow" />
+            <CheckCircle2 className="h-10 w-10 text-emerald-400" />
           </div>
 
           <div className="space-y-1">
@@ -269,7 +348,7 @@ Su participación es fundamental para el desarrollo y bienestar de su comunidad 
 
           <div className="p-6 bg-[#0b111e] border border-[#1e2d4a] rounded-xl flex flex-col items-center gap-2">
             <MapPin className="h-6 w-6 text-[#60c0ea]" />
-            <span className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Mesa Asignada</span>
+            <span className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Mesa de Trabajo</span>
             <span className="text-2xl font-black text-white">Mesa {mesaAsignada.numero}</span>
             <span className="text-sm text-gray-300 font-medium">{mesaAsignada.nombre}</span>
           </div>
