@@ -1093,56 +1093,31 @@ _Nota: Número para solo envío de mensajería masiva - No recibe respuestas_`;
               <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
                 ¿A qué mesas asistirá personalmente el Presidente?
               </label>
-              {foundGuest.mesas_preasignadas.length === 0 ? (
-                <div className="space-y-2">
-                  <p className="text-amber-400 text-xs font-semibold mb-2">⚠️ El presidente no tiene mesas preasignadas en el sistema. Seleccione de la lista general:</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-[#1a2640] p-4 rounded-xl border border-[#1e2d4a] max-h-48 overflow-y-auto">
-                    {mesas.map(m => {
-                      const isChecked = selectedMesaIds.includes(m.id);
-                      return (
-                        <label key={m.id} className="flex items-center gap-3 text-xs text-gray-300 hover:text-white cursor-pointer py-1 px-2 rounded hover:bg-[#111a2e] transition-colors">
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={() => {
-                              if (isChecked) {
-                                setSelectedMesaIds(selectedMesaIds.filter(id => id !== m.id));
-                              } else {
-                                setSelectedMesaIds([...selectedMesaIds, m.id]);
-                              }
-                            }}
-                            className="rounded border-[#1e2d4a] bg-[#111a2e] text-[#60c0ea] focus:ring-0 focus:ring-offset-0"
-                          />
-                          <span>{m.nombre}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-[#1a2640] p-4 rounded-xl border border-[#1e2d4a]">
-                  {foundGuest.mesas_preasignadas.map(m => {
-                    const isChecked = selectedMesaIds.includes(m.id);
-                    return (
-                      <label key={m.id} className="flex items-center gap-3 text-sm text-gray-300 hover:text-white cursor-pointer py-1.5 px-2.5 rounded hover:bg-[#111a2e] transition-colors">
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={() => {
-                            if (isChecked) {
-                              setSelectedMesaIds(selectedMesaIds.filter(id => id !== m.id));
-                            } else {
-                              setSelectedMesaIds([...selectedMesaIds, m.id]);
-                            }
-                          }}
-                          className="rounded border-[#1e2d4a] bg-[#111a2e] text-[#60c0ea] focus:ring-0 focus:ring-offset-0"
-                        />
-                        <span>{m.nombre}</span>
-                      </label>
-                    );
-                  })}
-                </div>
+              {foundGuest.mesas_preasignadas.length > 0 && (
+                <p className="text-emerald-400 text-xs font-semibold mb-2">ℹ️ Se han pre-seleccionado las mesas asignadas del participante. Puedes marcar mesas adicionales si es necesario:</p>
               )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-[#1a2640] p-4 rounded-xl border border-[#1e2d4a] max-h-48 overflow-y-auto">
+                {mesas.map(m => {
+                  const isChecked = selectedMesaIds.includes(m.id);
+                  return (
+                    <label key={m.id} className="flex items-center gap-3 text-xs text-gray-300 hover:text-white cursor-pointer py-1 px-2 rounded hover:bg-[#111a2e] transition-colors">
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => {
+                          if (isChecked) {
+                            setSelectedMesaIds(selectedMesaIds.filter(id => id !== m.id));
+                          } else {
+                            setSelectedMesaIds([...selectedMesaIds, m.id]);
+                          }
+                        }}
+                        className="rounded border-[#1e2d4a] bg-[#111a2e] text-[#60c0ea] focus:ring-0 focus:ring-offset-0"
+                      />
+                      <span>{m.nombre}</span>
+                    </label>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Toggle Acompañantes */}
