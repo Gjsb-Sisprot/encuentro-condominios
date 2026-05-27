@@ -17,6 +17,7 @@ interface AsistenteConMesa {
   id: string;
   nombre: string;
   municipio: string;
+  parroquia?: string | null;
   asistio: boolean;
   es_acompanante: boolean;
   condominio: string;
@@ -34,6 +35,7 @@ interface DbAsistenteJoin {
   id: string;
   nombre: string;
   municipio: string;
+  parroquia: string | null;
   asistio: boolean;
   es_acompanante: boolean | null;
   condominio: string;
@@ -81,7 +83,7 @@ export default function DashboardPage() {
        const { data: dbAsistentes } = await supabase
          .from('asistentes')
          .select(`
-           id, nombre, municipio, asistio, es_acompanante, condominio, telefono, es_directivo, cargo_directivo,
+           id, nombre, municipio, parroquia, asistio, es_acompanante, condominio, telefono, es_directivo, cargo_directivo,
            asistente_mesa (
              mesas_trabajo (id, numero, nombre)
            )
@@ -92,6 +94,7 @@ export default function DashboardPage() {
          id: item.id,
          nombre: item.nombre,
          municipio: item.municipio,
+         parroquia: item.parroquia,
          asistio: item.asistio,
          es_acompanante: item.es_acompanante || false,
          condominio: item.condominio,
@@ -202,6 +205,19 @@ export default function DashboardPage() {
     }
   });
 
+  // Group global check-ins by parroquia based on filtered set
+  const parroquiaStats: { [parroquia: string]: { total: number; asistieron: number } } = {};
+  asistentesFiltrados.forEach(a => {
+    const parr = a.parroquia || 'No especificada';
+    if (!parroquiaStats[parr]) {
+      parroquiaStats[parr] = { total: 0, asistieron: 0 };
+    }
+    parroquiaStats[parr].total += 1;
+    if (a.asistio) {
+      parroquiaStats[parr].asistieron += 1;
+    }
+  });
+
   return (
     <div className="space-y-8 animate-slide-up">
       {/* Encabezado */}
@@ -211,7 +227,7 @@ export default function DashboardPage() {
             <BarChart3 className="h-8 w-8 text-[#60c0ea]" /> Dashboard Estadístico
           </h1>
           <p className="text-gray-400 text-sm mt-1">
-            Métricas de asistencia y desglose de quórum por mesa y por municipio en tiempo real.
+            Métricas de asistencia y desglose de quórum por mesa, municipio y parroquia en tiempo real.
           </p>
         </div>
         <button
@@ -348,7 +364,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Gráficos de mesas de trabajo y municipios */}
+      {/* Gráficos de mesas de trabajo y municipios/parroquias */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
         {/* Panel Izquierdo: Quórum de Asistencia por Mesa */}
@@ -429,44 +445,90 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Panel Derecho: Estadísticas por Municipio */}
-        <div className="lg:col-span-1 bg-[#111a2e] border border-[#1e2d4a] rounded-2xl p-6 space-y-6">
-          <h2 className="text-xl font-bold text-white flex items-center gap-2 border-b border-[#1e2d4a] pb-3">
-            <MapPin className="h-5 w-5 text-[#f3af30]" /> Asistencia por Municipio
-          </h2>
+        {/* Panel Derecho: Estadísticas por Territorio (Municipio y Parroquia) */}
+        <div className="lg:col-span-1 space-y-6">
+          {/* Asistencia por Municipio */}
+          <div className="bg-[#111a2e] border border-[#1e2d4a] rounded-2xl p-6 space-y-6">
+            <h2 className="text-xl font-bold text-white flex items-center gap-2 border-b border-[#1e2d4a] pb-3">
+              <MapPin className="h-5 w-5 text-[#f3af30]" /> Asistencia por Municipio
+            </h2>
 
-          <div className="space-y-4">
-            {Object.keys(municipioStats).length === 0 ? (
-              <div className="py-12 text-center text-gray-500 text-sm">
-                No hay registros de municipios cargados.
-              </div>
-            ) : (
-              Object.entries(municipioStats).map(([muni, stat]) => {
-                const percentAsis = stat.total > 0 
-                  ? Math.round((stat.asistieron / stat.total) * 100) 
-                  : 0;
-                return (
-                  <div key={muni} className="p-4 bg-[#0b111e] rounded-xl border border-[#1e2d4a] space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="font-bold text-white">{muni}</span>
-                      <span className="text-xs text-gray-400 font-medium">
-                        {stat.asistieron} / {stat.total} asistieron
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <div className="h-2 flex-1 bg-[#1a2640] rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-[#f3af30] rounded-full"
-                          style={{ width: `${percentAsis}%` }}
-                        ></div>
+            <div className="space-y-4">
+              {Object.keys(municipioStats).length === 0 ? (
+                <div className="py-12 text-center text-gray-500 text-sm">
+                  No hay registros de municipios cargados.
+                </div>
+              ) : (
+                Object.entries(municipioStats).map(([muni, stat]) => {
+                  const percentAsis = stat.total > 0 
+                    ? Math.round((stat.asistieron / stat.total) * 100) 
+                    : 0;
+                  return (
+                    <div key={muni} className="p-4 bg-[#0b111e] rounded-xl border border-[#1e2d4a] space-y-2">
+                      <div className="flex justify-between items-center">
+                        <span className="font-bold text-white">{muni}</span>
+                        <span className="text-xs text-gray-400 font-medium">
+                          {stat.asistieron} / {stat.total} asistieron
+                        </span>
                       </div>
-                      <span className="text-xs font-bold text-[#f3af30] shrink-0">{percentAsis}%</span>
+
+                      <div className="flex items-center gap-3">
+                        <div className="h-2 flex-1 bg-[#1a2640] rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-[#f3af30] rounded-full"
+                            style={{ width: `${percentAsis}%` }}
+                          ></div>
+                        </div>
+                        <span className="text-xs font-bold text-[#f3af30] shrink-0">{percentAsis}%</span>
+                      </div>
                     </div>
-                  </div>
-                );
-              })
-            )}
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {/* Asistencia por Parroquia */}
+          <div className="bg-[#111a2e] border border-[#1e2d4a] rounded-2xl p-6 space-y-6">
+            <h2 className="text-xl font-bold text-white flex items-center gap-2 border-b border-[#1e2d4a] pb-3">
+              <MapPin className="h-5 w-5 text-[#60c0ea]" /> Asistencia por Parroquia
+            </h2>
+
+            <div className="space-y-4 max-h-[350px] overflow-y-auto pr-1">
+              {Object.keys(parroquiaStats).length === 0 ? (
+                <div className="py-12 text-center text-gray-500 text-sm">
+                  No hay registros de parroquias cargados.
+                </div>
+              ) : (
+                Object.entries(parroquiaStats)
+                  .sort((a, b) => b[1].asistieron - a[1].asistieron)
+                  .map(([parr, stat]) => {
+                    const percentAsis = stat.total > 0 
+                      ? Math.round((stat.asistieron / stat.total) * 100) 
+                      : 0;
+                    return (
+                      <div key={parr} className="p-3 bg-[#0b111e] rounded-xl border border-[#1e2d4a] space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="font-bold text-white text-xs truncate max-w-[170px]" title={parr}>{parr}</span>
+                          <span className="text-[10px] text-gray-400 font-medium">
+                            {stat.asistieron} / {stat.total} asistieron
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <div className="h-1.5 flex-1 bg-[#1a2640] rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-[#60c0ea] rounded-full"
+                              style={{ width: `${percentAsis}%` }}
+                            ></div>
+                          </div>
+                          <span className="text-[10px] font-bold text-[#60c0ea] shrink-0">{percentAsis}%</span>
+                        </div>
+                      </div>
+                    );
+                  })
+              )}
+            </div>
           </div>
         </div>
 

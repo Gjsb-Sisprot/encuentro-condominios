@@ -4,7 +4,8 @@
  import { supabase } from '@/lib/supabase';
  import { 
    Plus, Trash2, CheckCircle2, AlertTriangle, 
-   RefreshCw, ClipboardList, Pencil, X 
+   RefreshCw, ClipboardList, Pencil, X,
+   ChevronLeft, ChevronRight 
  } from 'lucide-react';
  
  const PARROQUIAS_POR_MUNICIPIO: { [key: string]: string[] } = {
@@ -117,6 +118,8 @@
  export default function AdminPage() {
    const [mesas, setMesas] = useState<Mesa[]>([]);
    const [asistentes, setAsistentes] = useState<Asistente[]>([]);
+   const [currentPage, setCurrentPage] = useState(1);
+   const itemsPerPage = 10;
    
    const [loading, setLoading] = useState(false);
    const [errorMsg, setErrorMsg] = useState('');
@@ -378,6 +381,17 @@
       setLoading(false);
     }
   };
+
+  const totalPages = Math.max(Math.ceil(asistentes.length / itemsPerPage), 1);
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = asistentes.slice(indexOfFirstItem, indexOfLastItem);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [asistentes, currentPage, totalPages]);
 
   return (
     <div className="space-y-8 animate-slide-up">
@@ -662,7 +676,7 @@
                     </td>
                   </tr>
                 ) : (
-                  asistentes.map(a => (
+                  currentItems.map(a => (
                     <tr key={a.id} className="hover:bg-[#15223e] transition-colors">
                       <td className="py-3 px-2 font-mono font-medium">{a.cedula || 'N/A'}</td>
                       <td className="py-3 px-2">
@@ -736,6 +750,38 @@
               </tbody>
             </table>
           </div>
+
+          {/* Controles de Paginación */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between border-t border-[#1e2d4a] pt-4 mt-4 text-xs">
+              <span className="text-gray-400">
+                Mostrando <span className="font-semibold text-white">{indexOfFirstItem + 1}</span> a{' '}
+                <span className="font-semibold text-white">
+                  {Math.min(indexOfLastItem, asistentes.length)}
+                </span>{' '}
+                de <span className="font-semibold text-white">{asistentes.length}</span> invitados
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#1a2640] border border-[#1e2d4a] text-gray-300 hover:text-white transition-colors disabled:opacity-40 disabled:hover:text-gray-300"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" /> Anterior
+                </button>
+                <div className="flex items-center gap-1.5 text-gray-400 px-2 font-medium">
+                  Página {currentPage} de {totalPages}
+                </div>
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#1a2640] border border-[#1e2d4a] text-gray-300 hover:text-white transition-colors disabled:opacity-40 disabled:hover:text-gray-300"
+                >
+                  Siguiente <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
