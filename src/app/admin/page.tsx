@@ -2,6 +2,7 @@
  
  import { useState, useEffect } from 'react';
  import { supabase } from '@/lib/supabase';
+ import { cleanCedula, cleanTelefono } from '@/lib/utils';
  import { 
    Plus, Trash2, CheckCircle2, AlertTriangle, 
    RefreshCw, ClipboardList, Pencil, X,
@@ -257,8 +258,8 @@
         // Mode: Edit
         const payload = {
           nombre: nuevoAsistente.nombre,
-          cedula: nuevoAsistente.cedula,
-          telefono: nuevoAsistente.telefono,
+          cedula: cleanCedula(nuevoAsistente.cedula),
+          telefono: cleanTelefono(nuevoAsistente.telefono),
           condominio: nuevoAsistente.condominio,
           municipio: nuevoAsistente.municipio,
           parroquia: nuevoAsistente.parroquia,
@@ -300,8 +301,8 @@
         // Mode: Create
         const payload = {
           nombre: nuevoAsistente.nombre,
-          cedula: nuevoAsistente.cedula,
-          telefono: nuevoAsistente.telefono,
+          cedula: cleanCedula(nuevoAsistente.cedula),
+          telefono: cleanTelefono(nuevoAsistente.telefono),
           condominio: nuevoAsistente.condominio,
           municipio: nuevoAsistente.municipio,
           parroquia: nuevoAsistente.parroquia,

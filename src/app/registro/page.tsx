@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { evolutionService } from '@/lib/evolution-api';
+import { cleanCedula, cleanTelefono } from '@/lib/utils';
 import { 
   Search, CheckCircle2, UserCheck, MessageSquare, 
   MapPin, AlertCircle, Loader2 
@@ -114,7 +115,8 @@ export default function RegistroPage() {
   // Search by Cédula
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!cedula.trim()) return;
+    const cleaned = cleanCedula(cedula);
+    if (!cleaned) return;
 
     setLoading(true);
     setErrorMsg('');
@@ -136,7 +138,7 @@ export default function RegistroPage() {
             mesas_trabajo (id, numero, nombre)
           )
         `)
-        .eq('cedula', cedula.trim());
+        .eq('cedula', cleaned);
 
       if (searchError) throw searchError;
 
@@ -260,8 +262,8 @@ export default function RegistroPage() {
           // Insert companion row
           const compPayload = {
             nombre: comp.nombre,
-            cedula: comp.cedula,
-            telefono: comp.telefono,
+            cedula: cleanCedula(comp.cedula),
+            telefono: cleanTelefono(comp.telefono),
             condominio: foundGuest.condominio,
             municipio: foundGuest.municipio,
             parroquia: foundGuest.parroquia,
