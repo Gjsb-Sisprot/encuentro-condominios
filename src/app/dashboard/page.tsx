@@ -288,7 +288,8 @@ export default function DashboardPage() {
   });
 
   return (
-    <div className="space-y-8 animate-slide-up">
+    <>
+      <div className="space-y-8 animate-slide-up">
       {/* Encabezado */}
       <div className="flex justify-between items-center">
         <div>
@@ -741,6 +742,8 @@ export default function DashboardPage() {
         })()
       )}
 
+      </div>
+
       {/* Modal para editar mesas de un asistente */}
       {editingAsistente && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -796,6 +799,6 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
