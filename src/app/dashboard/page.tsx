@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { estaPresenteEnEvento } from '@/lib/utils';
 import { 
   Users, UserCheck, Percent, BarChart3, 
   MapPin, RefreshCw, Layers, Pencil 
@@ -159,6 +158,24 @@ export default function DashboardPage() {
        setSavingMesa(false);
      }
    };
+
+   const handleToggleAttendance = async (asistenteId: string, currentAsistio: boolean) => {
+     try {
+       const newAsistio = !currentAsistio;
+       const { error } = await supabase
+         .from('asistentes')
+         .update({
+           asistio: newAsistio,
+           fecha_registro: newAsistio ? new Date().toISOString() : null
+         })
+         .eq('id', asistenteId);
+       
+       if (error) throw error;
+       await fetchData();
+     } catch (err) {
+       console.error('Error toggling attendance:', err);
+     }
+   };
  
    useEffect(() => {
     fetchData();
@@ -216,9 +233,9 @@ export default function DashboardPage() {
     };
   });
 
-  // Aggregate attendee data (presente = check-in digital o mesa asignada)
+  // Aggregate attendee data
   asistentesFiltrados.forEach(a => {
-    if (estaPresenteEnEvento(a)) {
+    if (a.asistio) {
       a.mesas_asignadas.forEach(m => {
         if (mesaStatsMap[m.id]) {
           const stats = mesaStatsMap[m.id];
@@ -246,7 +263,7 @@ export default function DashboardPage() {
       municipioStats[mun] = { total: 0, asistieron: 0 };
     }
     municipioStats[mun].total += 1;
-    if (estaPresenteEnEvento(a)) {
+    if (a.asistio) {
       municipioStats[mun].asistieron += 1;
     }
   });
@@ -259,7 +276,7 @@ export default function DashboardPage() {
       parroquiaStats[parr] = { total: 0, asistieron: 0 };
     }
     parroquiaStats[parr].total += 1;
-    if (estaPresenteEnEvento(a)) {
+    if (a.asistio) {
       parroquiaStats[parr].asistieron += 1;
     }
   });
@@ -344,7 +361,7 @@ export default function DashboardPage() {
             <span className="text-xs font-bold text-gray-400 uppercase tracking-wider block">Presidentes</span>
             <div className="flex items-baseline gap-2">
               <span className="text-4xl font-extrabold text-white">
-                {asistentes.filter(a => !a.es_acompanante && estaPresenteEnEvento(a)).length}
+                {asistentes.filter(a => !a.es_acompanante && a.asistio).length}
               </span>
               <span className="text-sm text-gray-400">
                 de {asistentes.filter(a => !a.es_acompanante).length}
@@ -373,7 +390,7 @@ export default function DashboardPage() {
           <div className="space-y-1">
             <span className="text-xs font-bold text-gray-400 uppercase tracking-wider block">Invitados</span>
             <span className="text-4xl font-extrabold text-emerald-400">
-              {asistentes.filter(a => a.es_acompanante && estaPresenteEnEvento(a)).length}
+              {asistentes.filter(a => a.es_acompanante && a.asistio).length}
             </span>
             <span className="text-xs text-gray-500 block">Acompañantes con mesa asignada o check-in</span>
           </div>
@@ -398,7 +415,7 @@ export default function DashboardPage() {
           <div className="space-y-1">
             <span className="text-xs font-bold text-gray-400 uppercase tracking-wider block">Totales por todo</span>
             <span className="text-4xl font-extrabold text-[#f3af30]">
-              {asistentes.filter(a => estaPresenteEnEvento(a)).length}
+              {asistentes.filter(a => a.asistio).length}
             </span>
             <span className="text-xs text-gray-500 block">Personas con mesa asignada o check-in</span>
           </div>
@@ -577,7 +594,6 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
-
       </div>
 
       {/* Detalle de Asistentes por Mesa seleccionada */}
@@ -585,7 +601,7 @@ export default function DashboardPage() {
         (() => {
           const selectedMesa = mesas.find(m => m.id === selectedMesaIdForDetail);
           const detailList = asistentesFiltrados.filter(
-            a => estaPresenteEnEvento(a) && a.mesas_asignadas.some(m => m.id === selectedMesaIdForDetail)
+            a => a.mesas_asignadas.some(m => m.id === selectedMesaIdForDetail)
           );
           
           return selectedMesa ? (
@@ -606,7 +622,7 @@ export default function DashboardPage() {
                   Cerrar Detalle
                 </button>
               </div>
-
+ 
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   <thead>
@@ -616,13 +632,14 @@ export default function DashboardPage() {
                       <th className="py-2.5 px-2">Condominio</th>
                       <th className="py-2.5 px-2">Municipio</th>
                       <th className="py-2.5 px-2">Teléfono</th>
+                      <th className="py-2.5 px-2">Asistencia</th>
                       <th className="py-2.5 px-2 text-right">Acción</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#1e2d4a]">
                     {detailList.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="py-8 text-center text-gray-500">
+                        <td colSpan={7} className="py-8 text-center text-gray-500">
                           No hay ningún asistente registrado en esta mesa de trabajo.
                         </td>
                       </tr>
@@ -644,6 +661,19 @@ export default function DashboardPage() {
                           <td className="py-3 px-2 text-gray-300 max-w-[200px] truncate">{a.condominio}</td>
                           <td className="py-3 px-2 text-gray-300">{a.municipio}</td>
                           <td className="py-3 px-2 font-mono text-gray-300">{a.telefono}</td>
+                          <td className="py-3 px-2">
+                            <button
+                              onClick={() => handleToggleAttendance(a.id, a.asistio)}
+                              className={`px-2.5 py-1 rounded-full text-xs font-bold transition-all border ${
+                                a.asistio
+                                  ? 'bg-emerald-950/40 text-emerald-400 border-emerald-900/60 hover:bg-red-950/20 hover:text-red-400 hover:border-red-900/60'
+                                  : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-emerald-950/20 hover:text-emerald-400 hover:border-emerald-900/60'
+                              }`}
+                              title={a.asistio ? "Haga clic para marcar como ausente (no está)" : "Haga clic para confirmar asistencia"}
+                            >
+                              {a.asistio ? 'Presente' : 'Ausente'}
+                            </button>
+                          </td>
                           <td className="py-3 px-2 text-right">
                             <button
                               onClick={() => {
