@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { 
   Search, ShieldAlert, CheckCircle2, HelpCircle, 
-  User, Phone, Clipboard, Save, X, RefreshCw 
+  User, Phone, Clipboard, Save, X, RefreshCw,
+  ChevronLeft, ChevronRight 
 } from 'lucide-react';
 
 interface CasoInfraestructura {
@@ -31,12 +32,19 @@ export default function CasosPage() {
   const [casos, setCasos] = useState<CasoInfraestructura[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   // Search & Filter states
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMunicipio, setSelectedMunicipio] = useState('Todos');
   const [selectedEstado, setSelectedEstado] = useState('Todos');
   const [selectedPrioridad, setSelectedPrioridad] = useState('Todos');
+
+  // Reset current page when filter or search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedMunicipio, selectedEstado, selectedPrioridad]);
 
   // Modal / Selected Case states
   const [selectedCaso, setSelectedCaso] = useState<CasoInfraestructura | null>(null);
@@ -146,6 +154,11 @@ export default function CasosPage() {
     return matchesSearch && matchesMunicipio && matchesEstado && matchesPrioridad;
   });
 
+  const totalPages = Math.max(Math.ceil(filteredCasos.length / itemsPerPage), 1);
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = filteredCasos.slice(indexOfFirstItem, indexOfLastItem);
+
   const uniqueMunicipios = Array.from(new Set(casos.map(c => c.municipio)));
 
   return (
@@ -254,7 +267,7 @@ export default function CasosPage() {
                     </td>
                   </tr>
                 ) : (
-                  filteredCasos.map(caso => (
+                  currentItems.map(caso => (
                     <tr 
                       key={caso.id} 
                       onClick={() => setSelectedCaso(caso)}
@@ -303,6 +316,38 @@ export default function CasosPage() {
                 )}
               </tbody>
             </table>
+          </div>
+        )}
+        
+        {/* Controles de Paginación */}
+        {!loading && totalPages > 1 && (
+          <div className="flex items-center justify-between border-t border-[#1e2d4a] p-4 text-xs bg-[#111a2e]">
+            <span className="text-gray-400">
+              Mostrando <span className="font-semibold text-white">{indexOfFirstItem + 1}</span> a{' '}
+              <span className="font-semibold text-white">
+                {Math.min(indexOfLastItem, filteredCasos.length)}
+              </span>{' '}
+              de <span className="font-semibold text-white">{filteredCasos.length}</span> casos
+            </span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#1a2640] border border-[#1e2d4a] text-gray-300 hover:text-white transition-colors disabled:opacity-40 disabled:hover:text-gray-300"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" /> Anterior
+              </button>
+              <div className="flex items-center gap-1.5 text-gray-400 px-2 font-medium">
+                Página {currentPage} de {totalPages}
+              </div>
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#1a2640] border border-[#1e2d4a] text-gray-300 hover:text-white transition-colors disabled:opacity-40 disabled:hover:text-gray-300"
+              >
+                Siguiente <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
         )}
       </div>
