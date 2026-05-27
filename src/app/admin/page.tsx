@@ -1,139 +1,180 @@
 'use client';
+ 
+ import { useState, useEffect } from 'react';
+ import { supabase } from '@/lib/supabase';
+ import { 
+   Plus, Trash2, CheckCircle2, AlertTriangle, 
+   RefreshCw, ClipboardList, Pencil, X 
+ } from 'lucide-react';
+ 
+ interface Mesa {
+   id: string;
+   numero: number;
+   nombre: string;
+ }
+ 
+ interface Asistente {
+   id: string;
+   nombre: string;
+   cedula: string;
+   telefono: string;
+   condominio: string;
+   municipio: string;
+   asistio: boolean;
+   es_acompanante?: boolean;
+   es_directivo?: boolean;
+   cargo_directivo?: string | null;
+   whatsapp_status: string;
+   whatsapp_error?: string;
+   mesas_asignadas: {
+     id: string;
+     numero: number;
+     nombre: string;
+   }[];
+ }
+ 
+ interface DbAsistenteJoin {
+   id: string;
+   nombre: string;
+   cedula: string;
+   telefono: string;
+   condominio: string;
+   municipio: string;
+   asistio: boolean;
+   es_acompanante: boolean | null;
+   es_directivo: boolean | null;
+   cargo_directivo: string | null;
+   whatsapp_status: string;
+   whatsapp_error: string | null;
+   asistente_mesa: {
+     mesas_trabajo: {
+       id: string;
+       numero: number;
+       nombre: string;
+     } | null;
+   }[];
+ }
+ 
+ export default function AdminPage() {
+   const [mesas, setMesas] = useState<Mesa[]>([]);
+   const [asistentes, setAsistentes] = useState<Asistente[]>([]);
+   
+   const [loading, setLoading] = useState(false);
+   const [errorMsg, setErrorMsg] = useState('');
+   const [successMsg, setSuccessMsg] = useState('');
+   const [editingAsistenteId, setEditingAsistenteId] = useState<string | null>(null);
+ 
+   // Form states for manual attendee
+   const [nuevoAsistente, setNuevoAsistente] = useState<{
+     nombre: string;
+     cedula: string;
+     telefono: string;
+     condominio: string;
+     municipio: string;
+     es_acompanante: boolean;
+     es_directivo: boolean;
+     cargo_directivo: string;
+     mesa_preasignada_ids: string[];
+   }>({
+     nombre: '',
+     cedula: '',
+     telefono: '',
+     condominio: '',
+     municipio: 'Mariño',
+     es_acompanante: false,
+     es_directivo: false,
+     cargo_directivo: '',
+     mesa_preasignada_ids: [],
+   });
+ 
+   const fetchData = async () => {
+     try {
+       setErrorMsg('');
+       // Fetch Mesas
+       const { data: dataMesas, error: errorMesas } = await supabase
+         .from('mesas_trabajo')
+         .select('*')
+         .order('numero', { ascending: true });
+       if (errorMesas) throw errorMesas;
+       setMesas(dataMesas as Mesa[] || []);
+ 
+       // Fetch Asistentes (joined with their assigned mesas through asistente_mesa)
+       const { data: dataAsistentes, error: errorAsistentes } = await supabase
+         .from('asistentes')
+         .select(`
+           id, nombre, cedula, telefono, condominio, municipio, asistio, 
+           es_acompanante, es_directivo, cargo_directivo,
+           whatsapp_status, whatsapp_error,
+           asistente_mesa (
+             mesas_trabajo (id, numero, nombre)
+           )
+         `)
+         .order('created_at', { ascending: false });
+       
+       if (errorAsistentes) throw errorAsistentes;
+       
+       // Transform data with proper typing
+       const rawList = (dataAsistentes || []) as unknown as DbAsistenteJoin[];
+       const formatted: Asistente[] = rawList.map((item) => ({
+         id: item.id,
+         nombre: item.nombre,
+         cedula: item.cedula,
+         telefono: item.telefono,
+         condominio: item.condominio,
+         municipio: item.municipio,
+         asistio: item.asistio,
+         es_acompanante: item.es_acompanante || false,
+         es_directivo: item.es_directivo || false,
+         cargo_directivo: item.cargo_directivo,
+         whatsapp_status: item.whatsapp_status,
+         whatsapp_error: item.whatsapp_error || undefined,
+         mesas_asignadas: (item.asistente_mesa || [])
+           .map(am => am.mesas_trabajo)
+           .filter((m): m is { id: string; numero: number; nombre: string } => m !== null)
+       }));
+ 
+       setAsistentes(formatted);
+     } catch (error) {
+       console.error('Error fetching data:', error);
+       setErrorMsg('Error al conectar con Supabase. Verifica la consola y el esquema SQL.');
+     }
+   };
+ 
+   useEffect(() => {
+     fetchData();
+   }, []);
 
-import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
-import { 
-  Plus, Trash2, CheckCircle2, AlertTriangle, 
-  RefreshCw, ClipboardList 
-} from 'lucide-react';
-
-interface Mesa {
-  id: string;
-  numero: number;
-  nombre: string;
-}
-
-interface Asistente {
-  id: string;
-  nombre: string;
-  cedula: string;
-  telefono: string;
-  condominio: string;
-  municipio: string;
-  asistio: boolean;
-  es_acompanante?: boolean;
-  es_directivo?: boolean;
-  cargo_directivo?: string | null;
-  whatsapp_status: string;
-  whatsapp_error?: string;
-  mesas_asignadas: {
-    numero: number;
-    nombre: string;
-  }[];
-}
-
-interface DbAsistenteJoin {
-  id: string;
-  nombre: string;
-  cedula: string;
-  telefono: string;
-  condominio: string;
-  municipio: string;
-  asistio: boolean;
-  es_acompanante: boolean | null;
-  es_directivo: boolean | null;
-  cargo_directivo: string | null;
-  whatsapp_status: string;
-  whatsapp_error: string | null;
-  asistente_mesa: {
-    mesas_trabajo: {
-      numero: number;
-      nombre: string;
-    } | null;
-  }[];
-}
-
-export default function AdminPage() {
-  const [mesas, setMesas] = useState<Mesa[]>([]);
-  const [asistentes, setAsistentes] = useState<Asistente[]>([]);
-  
-  const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
-  const [successMsg, setSuccessMsg] = useState('');
-
-  // Form states for manual attendee
-  const [nuevoAsistente, setNuevoAsistente] = useState<{
-    nombre: string;
-    cedula: string;
-    telefono: string;
-    condominio: string;
-    municipio: string;
-    mesa_preasignada_ids: string[];
-  }>({
-    nombre: '',
-    cedula: '',
-    telefono: '',
-    condominio: '',
-    municipio: 'Mariño',
-    mesa_preasignada_ids: [],
-  });
-
-  const fetchData = async () => {
-    try {
-      setErrorMsg('');
-      // Fetch Mesas
-      const { data: dataMesas, error: errorMesas } = await supabase
-        .from('mesas_trabajo')
-        .select('*')
-        .order('numero', { ascending: true });
-      if (errorMesas) throw errorMesas;
-      setMesas(dataMesas as Mesa[] || []);
-
-      // Fetch Asistentes (joined with their assigned mesas through asistente_mesa)
-      const { data: dataAsistentes, error: errorAsistentes } = await supabase
-        .from('asistentes')
-        .select(`
-          id, nombre, cedula, telefono, condominio, municipio, asistio, 
-          es_acompanante, es_directivo, cargo_directivo,
-          whatsapp_status, whatsapp_error,
-          asistente_mesa (
-            mesas_trabajo (numero, nombre)
-          )
-        `)
-        .order('created_at', { ascending: false });
-      
-      if (errorAsistentes) throw errorAsistentes;
-      
-      // Transform data with proper typing
-      const rawList = (dataAsistentes || []) as unknown as DbAsistenteJoin[];
-      const formatted: Asistente[] = rawList.map((item) => ({
-        id: item.id,
-        nombre: item.nombre,
-        cedula: item.cedula,
-        telefono: item.telefono,
-        condominio: item.condominio,
-        municipio: item.municipio,
-        asistio: item.asistio,
-        es_acompanante: item.es_acompanante || false,
-        es_directivo: item.es_directivo || false,
-        cargo_directivo: item.cargo_directivo,
-        whatsapp_status: item.whatsapp_status,
-        whatsapp_error: item.whatsapp_error || undefined,
-        mesas_asignadas: (item.asistente_mesa || [])
-          .map(am => am.mesas_trabajo)
-          .filter((m): m is { numero: number; nombre: string } => m !== null)
-      }));
-
-      setAsistentes(formatted);
-    } catch (error) {
-      console.error('Error fetching data:', error);
-      setErrorMsg('Error al conectar con Supabase. Verifica la consola y el esquema SQL.');
-    }
+  const handleEditarClick = (a: Asistente) => {
+    setErrorMsg('');
+    setSuccessMsg('');
+    setEditingAsistenteId(a.id);
+    setNuevoAsistente({
+      nombre: a.nombre,
+      cedula: a.cedula,
+      telefono: a.telefono,
+      condominio: a.condominio,
+      municipio: a.municipio,
+      es_acompanante: a.es_acompanante || false,
+      es_directivo: a.es_directivo || false,
+      cargo_directivo: a.cargo_directivo || '',
+      mesa_preasignada_ids: a.mesas_asignadas.map(m => m.id),
+    });
   };
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  const handleCancelarEdicion = () => {
+    setEditingAsistenteId(null);
+    setNuevoAsistente({
+      nombre: '',
+      cedula: '',
+      telefono: '',
+      condominio: '',
+      municipio: 'Mariño',
+      es_acompanante: false,
+      es_directivo: false,
+      cargo_directivo: '',
+      mesa_preasignada_ids: [],
+    });
+  };
 
   const handleCrearAsistente = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -145,50 +186,102 @@ export default function AdminPage() {
         throw new Error('Todos los campos obligatorios deben completarse.');
       }
 
-      const payload = {
-        nombre: nuevoAsistente.nombre,
-        cedula: nuevoAsistente.cedula,
-        telefono: nuevoAsistente.telefono,
-        condominio: nuevoAsistente.condominio,
-        municipio: nuevoAsistente.municipio,
-        asistio: false,
-      };
+      if (editingAsistenteId) {
+        // Mode: Edit
+        const payload = {
+          nombre: nuevoAsistente.nombre,
+          cedula: nuevoAsistente.cedula,
+          telefono: nuevoAsistente.telefono,
+          condominio: nuevoAsistente.condominio,
+          municipio: nuevoAsistente.municipio,
+          es_acompanante: nuevoAsistente.es_acompanante,
+          es_directivo: nuevoAsistente.es_acompanante ? nuevoAsistente.es_directivo : false,
+          cargo_directivo: (nuevoAsistente.es_acompanante && nuevoAsistente.es_directivo) ? nuevoAsistente.cargo_directivo : null,
+        };
 
-      const { data, error } = await supabase
-        .from('asistentes')
-        .insert([payload])
-        .select('id');
+        const { error } = await supabase
+          .from('asistentes')
+          .update(payload)
+          .eq('id', editingAsistenteId);
 
-      if (error) throw error;
-      if (!data || data.length === 0) throw new Error('No se pudo recuperar el ID del asistente insertado.');
+        if (error) throw error;
 
-      const asistenteId = data[0].id;
-
-      if (nuevoAsistente.mesa_preasignada_ids.length > 0) {
-        const relations = nuevoAsistente.mesa_preasignada_ids.map(mesaId => ({
-          asistente_id: asistenteId,
-          mesa_id: mesaId
-        }));
-        const { error: relError } = await supabase
+        // Delete existing relations
+        const { error: deleteRelError } = await supabase
           .from('asistente_mesa')
-          .insert(relations);
-        if (relError) throw relError;
+          .delete()
+          .eq('asistente_id', editingAsistenteId);
+
+        if (deleteRelError) throw deleteRelError;
+
+        // Insert new relations
+        if (nuevoAsistente.mesa_preasignada_ids.length > 0) {
+          const relations = nuevoAsistente.mesa_preasignada_ids.map(mesaId => ({
+            asistente_id: editingAsistenteId,
+            mesa_id: mesaId
+          }));
+          const { error: relError } = await supabase
+            .from('asistente_mesa')
+            .insert(relations);
+          if (relError) throw relError;
+        }
+
+        setSuccessMsg(`Asistente "${nuevoAsistente.nombre}" actualizado con éxito.`);
+        setEditingAsistenteId(null);
+      } else {
+        // Mode: Create
+        const payload = {
+          nombre: nuevoAsistente.nombre,
+          cedula: nuevoAsistente.cedula,
+          telefono: nuevoAsistente.telefono,
+          condominio: nuevoAsistente.condominio,
+          municipio: nuevoAsistente.municipio,
+          es_acompanante: nuevoAsistente.es_acompanante,
+          es_directivo: nuevoAsistente.es_acompanante ? nuevoAsistente.es_directivo : false,
+          cargo_directivo: (nuevoAsistente.es_acompanante && nuevoAsistente.es_directivo) ? nuevoAsistente.cargo_directivo : null,
+          asistio: false,
+        };
+
+        const { data, error } = await supabase
+          .from('asistentes')
+          .insert([payload])
+          .select('id');
+
+        if (error) throw error;
+        if (!data || data.length === 0) throw new Error('No se pudo recuperar el ID del asistente insertado.');
+
+        const asistenteId = data[0].id;
+
+        if (nuevoAsistente.mesa_preasignada_ids.length > 0) {
+          const relations = nuevoAsistente.mesa_preasignada_ids.map(mesaId => ({
+            asistente_id: asistenteId,
+            mesa_id: mesaId
+          }));
+          const { error: relError } = await supabase
+            .from('asistente_mesa')
+            .insert(relations);
+          if (relError) throw relError;
+        }
+
+        setSuccessMsg(`Asistente "${nuevoAsistente.nombre}" registrado con éxito.`);
       }
 
-      setSuccessMsg(`Presidente ${nuevoAsistente.nombre} registrado con éxito.`);
       setNuevoAsistente({
         nombre: '',
         cedula: '',
         telefono: '',
         condominio: '',
         municipio: 'Mariño',
+        es_acompanante: false,
+        es_directivo: false,
+        cargo_directivo: '',
         mesa_preasignada_ids: [],
       });
       fetchData();
     } catch (err) {
       console.error(err);
       const errorObj = err as Error;
-      setErrorMsg(errorObj.message || 'Error al crear asistente.');
+      setErrorMsg(errorObj.message || 'Error al procesar el asistente.');
     } finally {
       setLoading(false);
     }
@@ -268,119 +361,189 @@ export default function AdminPage() {
 
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Formulario para agregar asistente manualmente */}
-        <div className="lg:col-span-1 bg-[#111a2e] border border-[#1e2d4a] rounded-2xl p-6 space-y-6">
-          <h2 className="text-xl font-bold text-white flex items-center gap-2 border-b border-[#1e2d4a] pb-3">
-            <Plus className="h-5 w-5 text-[#60c0ea]" /> Registrar Nuevo Invitado
-          </h2>
-
-          <form onSubmit={handleCrearAsistente} className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Nombre Completo *</label>
-              <input
-                type="text"
-                required
-                value={nuevoAsistente.nombre}
-                onChange={e => setNuevoAsistente({ ...nuevoAsistente, nombre: e.target.value })}
-                className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#60c0ea]"
-                placeholder="Nombre del presidente"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Cédula de Identidad *</label>
-              <input
-                type="text"
-                required
-                value={nuevoAsistente.cedula}
-                onChange={e => setNuevoAsistente({ ...nuevoAsistente, cedula: e.target.value })}
-                className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#60c0ea]"
-                placeholder="Ej. 12345678"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Teléfono (WhatsApp) *</label>
-              <input
-                type="text"
-                required
-                value={nuevoAsistente.telefono}
-                onChange={e => setNuevoAsistente({ ...nuevoAsistente, telefono: e.target.value })}
-                className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#60c0ea]"
-                placeholder="Ej. 04141234567"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Nombre del Condominio *</label>
-              <input
-                type="text"
-                required
-                value={nuevoAsistente.condominio}
-                onChange={e => setNuevoAsistente({ ...nuevoAsistente, condominio: e.target.value })}
-                className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#60c0ea]"
-                placeholder="Ej. Condominio El Paraíso"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Municipio *</label>
-              <select
-                value={nuevoAsistente.municipio}
-                onChange={e => setNuevoAsistente({ ...nuevoAsistente, municipio: e.target.value })}
-                className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#60c0ea]"
-              >
-                <option value="Mariño">Mariño</option>
-                <option value="Maneiro">Maneiro</option>
-                <option value="García">García</option>
-                <option value="Arismendi">Arismendi</option>
-                <option value="Díaz">Díaz</option>
-                <option value="Tubores">Tubores</option>
-                <option value="Península de Macanao">Península de Macanao</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Mesas Preasignadas</label>
-              <div className="space-y-2 bg-[#1a2640] border border-[#1e2d4a] rounded-lg p-3 max-h-48 overflow-y-auto">
-                {mesas.map(m => {
-                  const isChecked = nuevoAsistente.mesa_preasignada_ids.includes(m.id);
-                  return (
-                    <label key={m.id} className="flex items-center gap-2 text-sm text-gray-300 hover:text-white cursor-pointer py-1">
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={() => {
-                          if (isChecked) {
-                            setNuevoAsistente({
-                              ...nuevoAsistente,
-                              mesa_preasignada_ids: nuevoAsistente.mesa_preasignada_ids.filter(id => id !== m.id)
-                            });
-                          } else {
-                            setNuevoAsistente({
-                              ...nuevoAsistente,
-                              mesa_preasignada_ids: [...nuevoAsistente.mesa_preasignada_ids, m.id]
-                            });
-                          }
-                        }}
-                        className="rounded border-[#1e2d4a] bg-[#111a2e] text-[#60c0ea] focus:ring-0 focus:ring-offset-0"
-                      />
-                      <span>Mesa {m.numero} ({m.nombre})</span>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-2 bg-[#004e74] hover:bg-[#004e74]/80 text-white font-bold text-sm rounded-lg transition-colors disabled:opacity-50"
-            >
-              Registrar Presidente
-            </button>
-          </form>
-        </div>
+         {/* Formulario para agregar/editar asistente */}
+         <div className="lg:col-span-1 bg-[#111a2e] border border-[#1e2d4a] rounded-2xl p-6 space-y-6">
+           <h2 className="text-xl font-bold text-white flex items-center gap-2 border-b border-[#1e2d4a] pb-3">
+             {editingAsistenteId ? (
+               <>
+                 <Pencil className="h-5 w-5 text-[#f3af30]" /> Editar Asistente
+               </>
+             ) : (
+               <>
+                 <Plus className="h-5 w-5 text-[#60c0ea]" /> Registrar Nuevo Invitado
+               </>
+             )}
+           </h2>
+ 
+           <form onSubmit={handleCrearAsistente} className="space-y-4">
+             <div>
+               <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Nombre Completo *</label>
+               <input
+                 type="text"
+                 required
+                 value={nuevoAsistente.nombre}
+                 onChange={e => setNuevoAsistente({ ...nuevoAsistente, nombre: e.target.value })}
+                 className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#60c0ea]"
+                 placeholder="Nombre del presidente"
+               />
+             </div>
+ 
+             <div>
+               <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Cédula de Identidad *</label>
+               <input
+                 type="text"
+                 required
+                 value={nuevoAsistente.cedula}
+                 onChange={e => setNuevoAsistente({ ...nuevoAsistente, cedula: e.target.value })}
+                 className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#60c0ea]"
+                 placeholder="Ej. 12345678"
+               />
+             </div>
+ 
+             <div>
+               <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Teléfono (WhatsApp) *</label>
+               <input
+                 type="text"
+                 required
+                 value={nuevoAsistente.telefono}
+                 onChange={e => setNuevoAsistente({ ...nuevoAsistente, telefono: e.target.value })}
+                 className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#60c0ea]"
+                 placeholder="Ej. 04141234567"
+               />
+             </div>
+ 
+             <div>
+               <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Nombre del Condominio *</label>
+               <input
+                 type="text"
+                 required
+                 value={nuevoAsistente.condominio}
+                 onChange={e => setNuevoAsistente({ ...nuevoAsistente, condominio: e.target.value })}
+                 className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#60c0ea]"
+                 placeholder="Ej. Condominio El Paraíso"
+               />
+             </div>
+ 
+             <div>
+               <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Municipio *</label>
+               <select
+                 value={nuevoAsistente.municipio}
+                 onChange={e => setNuevoAsistente({ ...nuevoAsistente, municipio: e.target.value })}
+                 className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#60c0ea]"
+               >
+                 <option value="Mariño">Mariño</option>
+                 <option value="Maneiro">Maneiro</option>
+                 <option value="García">García</option>
+                 <option value="Arismendi">Arismendi</option>
+                 <option value="Díaz">Díaz</option>
+                 <option value="Tubores">Tubores</option>
+                 <option value="Península de Macanao">Península de Macanao</option>
+               </select>
+             </div>
+ 
+             {/* Opción de Acompañante / Directivo */}
+             <div className="space-y-3 pt-2 border-t border-[#1e2d4a]">
+               <label className="flex items-center gap-2 text-sm text-gray-300 hover:text-white cursor-pointer">
+                 <input
+                   type="checkbox"
+                   checked={nuevoAsistente.es_acompanante}
+                   onChange={e => setNuevoAsistente({ 
+                     ...nuevoAsistente, 
+                     es_acompanante: e.target.checked,
+                     es_directivo: e.target.checked ? nuevoAsistente.es_directivo : false,
+                     cargo_directivo: e.target.checked ? nuevoAsistente.cargo_directivo : ''
+                   })}
+                   className="rounded border-[#1e2d4a] bg-[#111a2e] text-[#60c0ea] focus:ring-0 focus:ring-offset-0"
+                 />
+                 <span>¿Es Acompañante? (Invitado)</span>
+               </label>
+ 
+               {nuevoAsistente.es_acompanante && (
+                 <div className="pl-6 space-y-3 border-l-2 border-[#1e2d4a] animate-slide-down">
+                   <label className="flex items-center gap-2 text-sm text-gray-300 hover:text-white cursor-pointer">
+                     <input
+                       type="checkbox"
+                       checked={nuevoAsistente.es_directivo}
+                       onChange={e => setNuevoAsistente({ 
+                         ...nuevoAsistente, 
+                         es_directivo: e.target.checked,
+                         cargo_directivo: e.target.checked ? nuevoAsistente.cargo_directivo : ''
+                       })}
+                       className="rounded border-[#1e2d4a] bg-[#111a2e] text-[#60c0ea] focus:ring-0 focus:ring-offset-0"
+                     />
+                     <span>¿Es Directivo del Condominio?</span>
+                   </label>
+ 
+                   {nuevoAsistente.es_directivo && (
+                     <div>
+                       <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Cargo Directivo *</label>
+                       <input
+                         type="text"
+                         required
+                         value={nuevoAsistente.cargo_directivo}
+                         onChange={e => setNuevoAsistente({ ...nuevoAsistente, cargo_directivo: e.target.value })}
+                         className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#60c0ea]"
+                         placeholder="Ej. Vocal, Tesorero, etc."
+                       />
+                     </div>
+                   )}
+                 </div>
+               )}
+             </div>
+ 
+             <div>
+               <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Mesas Preasignadas</label>
+               <div className="space-y-2 bg-[#1a2640] border border-[#1e2d4a] rounded-lg p-3 max-h-48 overflow-y-auto">
+                 {mesas.map(m => {
+                   const isChecked = nuevoAsistente.mesa_preasignada_ids.includes(m.id);
+                   return (
+                     <label key={m.id} className="flex items-center gap-2 text-sm text-gray-300 hover:text-white cursor-pointer py-1">
+                       <input
+                         type="checkbox"
+                         checked={isChecked}
+                         onChange={() => {
+                           if (isChecked) {
+                             setNuevoAsistente({
+                               ...nuevoAsistente,
+                               mesa_preasignada_ids: nuevoAsistente.mesa_preasignada_ids.filter(id => id !== m.id)
+                             });
+                           } else {
+                             setNuevoAsistente({
+                               ...nuevoAsistente,
+                               mesa_preasignada_ids: [...nuevoAsistente.mesa_preasignada_ids, m.id]
+                             });
+                           }
+                         }}
+                         className="rounded border-[#1e2d4a] bg-[#111a2e] text-[#60c0ea] focus:ring-0 focus:ring-offset-0"
+                       />
+                       <span>Mesa {m.numero} ({m.nombre})</span>
+                     </label>
+                   );
+                 })}
+               </div>
+             </div>
+ 
+             <div className="space-y-2 pt-2">
+               <button
+                 type="submit"
+                 disabled={loading}
+                 className="w-full py-2 bg-[#004e74] hover:bg-[#004e74]/80 text-white font-bold text-sm rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
+               >
+                 {editingAsistenteId ? 'Guardar Cambios' : 'Registrar Presidente'}
+               </button>
+ 
+               {editingAsistenteId && (
+                 <button
+                   type="button"
+                   onClick={handleCancelarEdicion}
+                   className="w-full py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold text-sm rounded-lg transition-colors flex items-center justify-center gap-1.5"
+                 >
+                   <X className="h-4 w-4" /> Cancelar Edición
+                 </button>
+               )}
+             </div>
+           </form>
+         </div>
 
         {/* Listado de Asistentes cargados */}
         <div className="lg:col-span-2 bg-[#111a2e] border border-[#1e2d4a] rounded-2xl p-6 space-y-6">
@@ -398,12 +561,13 @@ export default function AdminPage() {
                   <th className="py-3 px-2">Mesas Preasignadas</th>
                   <th className="py-3 px-2">Asistió</th>
                   <th className="py-3 px-2">Notificación WA</th>
+                  <th className="py-3 px-2 text-right">Acción</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#1e2d4a]">
                 {asistentes.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-8 text-center text-gray-500">
+                    <td colSpan={7} className="py-8 text-center text-gray-500">
                       No hay ningún asistente en la base de datos.
                     </td>
                   </tr>
@@ -466,6 +630,15 @@ export default function AdminPage() {
                         ) : (
                           <span className="text-gray-400 text-xs">Pendiente</span>
                         )}
+                      </td>
+                      <td className="py-3 px-2 text-right">
+                        <button
+                          onClick={() => handleEditarClick(a)}
+                          title="Editar asistente"
+                          className="p-1.5 text-xs rounded bg-[#1a2640] border border-[#1e2d4a] text-gray-300 hover:text-white hover:bg-[#1e2d4a] transition-colors"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
                       </td>
                     </tr>
                   ))
