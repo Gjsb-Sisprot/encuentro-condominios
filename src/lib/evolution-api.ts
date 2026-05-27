@@ -19,10 +19,23 @@ class EvolutionService {
   async sendWhatsAppMessage(number: string, text: string): Promise<{ success: boolean; data?: EvolutionSendResponse; error?: string }> {
     try {
       // Limpiar el número: conservar solo dígitos
-      const cleanNumber = number.replace(/\D/g, '');
+      let cleanNumber = number.replace(/\D/g, '');
       
       if (!cleanNumber) {
         return { success: false, error: 'Número de teléfono inválido' };
+      }
+
+      // Convertir formato local (ej: 0424... o 424...) al formato internacional requerido (58424...)
+      if (cleanNumber.startsWith('0')) {
+        cleanNumber = '58' + cleanNumber.substring(1);
+      } else if (
+        cleanNumber.startsWith('412') || 
+        cleanNumber.startsWith('414') || 
+        cleanNumber.startsWith('416') || 
+        cleanNumber.startsWith('424') || 
+        cleanNumber.startsWith('426')
+      ) {
+        cleanNumber = '58' + cleanNumber;
       }
 
       const url = `${this.baseURL}/message/sendText/${this.instanceName}`;
