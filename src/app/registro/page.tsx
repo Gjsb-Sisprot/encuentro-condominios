@@ -149,12 +149,18 @@ export default function RegistroPage() {
 
       // Send WhatsApp
       if (updatedGuest.telefono) {
-        const customMessage = `¡Hola, ${updatedGuest.nombre}! Le damos una cordial bienvenida al Primer Encuentro de Condominios. 
- 
-Ha sido asignado a la: 
-📌 *Mesa ${chosenMesa.numero}: ${chosenMesa.nombre}*
- 
-Su participación es fundamental para el desarrollo y bienestar de su comunidad (${updatedGuest.condominio}). ¡Nos vemos adentro!`;
+        const customMessage = `Hola, *${updatedGuest.nombre}*;
+
+Bienvenido a la *MESA DE LOS SERVICIOS PÚBLICOS CONDOMINIALES DEL MUNICIPIO GIRARDOT*
+
+En nombre de nuestra Gobernadora Joana Sánchez queremos darte la cordial bienvenida. 
+
+📌 Has sido asignado a la:
+*Mesa ${chosenMesa.numero}: ${chosenMesa.nombre}*
+
+Tu participación en representación de la comunidad *${updatedGuest.condominio}* es sumamente valiosa para nosotros.
+
+Sin duda alguna, ¡Aragua nos une, y siempre nos vamos a encontrar! Eres Gente de Bien, HACIÉNDOLO BIEN! 🚀`;
 
         setWaStatus({ success: false, msg: 'Enviando mensaje de confirmación...' });
         const waResult = await evolutionService.sendWhatsAppMessage(updatedGuest.telefono, customMessage);

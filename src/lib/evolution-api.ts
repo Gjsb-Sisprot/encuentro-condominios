@@ -13,8 +13,8 @@ export interface EvolutionSendResponse {
 
 class EvolutionService {
   private baseURL = process.env.NEXT_PUBLIC_EVOLUTION_API_URL || 'https://sisprot-evolution-api.x8cfq6.easypanel.host';
-  private apiKey = process.env.EVOLUTION_API_KEY || '26F9D106EA66-4FE6-96EF-A6057B5131B7';
-  private instanceName = 'Sisprot%20GF%20CallCenter%20Definitivo';
+  private apiKey = process.env.EVOLUTION_API_KEY || '4C9B56777013-421C-B5C1-23592AF3915C';
+  private instanceName = process.env.EVOLUTION_INSTANCE_NAME || 'Tablet%20Sisprot%20%200008';
 
   async sendWhatsAppMessage(number: string, text: string): Promise<{ success: boolean; data?: EvolutionSendResponse; error?: string }> {
     try {
