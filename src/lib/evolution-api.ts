@@ -13,29 +13,22 @@ export interface EvolutionSendResponse {
 
 class EvolutionService {
   private baseURL = process.env.NEXT_PUBLIC_EVOLUTION_API_URL || 'https://sisprot-evolution-api.x8cfq6.easypanel.host';
-  private apiKey = process.env.EVOLUTION_API_KEY || '4C9B56777013-421C-B5C1-23592AF3915C';
-  private instanceName = process.env.EVOLUTION_INSTANCE_NAME || 'Tablet%20Sisprot%20%200008';
+  private apiKey = process.env.EVOLUTION_API_KEY || '26F9D106EA66-4FE6-96EF-A6057B5131B7';
+  private instanceName = process.env.EVOLUTION_INSTANCE_NAME || 'Sisprot%20GF%20CallCenter%20Definitivo';
 
   async sendWhatsAppMessage(number: string, text: string): Promise<{ success: boolean; data?: EvolutionSendResponse; error?: string }> {
     try {
-      // Limpiar el número: conservar solo dígitos
       let cleanNumber = number.replace(/\D/g, '');
+      
+      // Formatear al formato internacional venezolano '58'
+      if (cleanNumber.startsWith('0')) {
+        cleanNumber = '58' + cleanNumber.substring(1);
+      } else if (!cleanNumber.startsWith('58') && cleanNumber.length === 10) {
+        cleanNumber = '58' + cleanNumber;
+      }
       
       if (!cleanNumber) {
         return { success: false, error: 'Número de teléfono inválido' };
-      }
-
-      // Convertir formato local (ej: 0424... o 424...) al formato internacional requerido (58424...)
-      if (cleanNumber.startsWith('0')) {
-        cleanNumber = '58' + cleanNumber.substring(1);
-      } else if (
-        cleanNumber.startsWith('412') || 
-        cleanNumber.startsWith('414') || 
-        cleanNumber.startsWith('416') || 
-        cleanNumber.startsWith('424') || 
-        cleanNumber.startsWith('426')
-      ) {
-        cleanNumber = '58' + cleanNumber;
       }
 
       const url = `${this.baseURL}/message/sendText/${this.instanceName}`;
