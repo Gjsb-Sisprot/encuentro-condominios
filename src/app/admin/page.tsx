@@ -126,6 +126,7 @@
    const [errorMsg, setErrorMsg] = useState('');
    const [successMsg, setSuccessMsg] = useState('');
    const [editingAsistenteId, setEditingAsistenteId] = useState<string | null>(null);
+   const [filterCedula, setFilterCedula] = useState('');
  
    // Form states for manual attendee
    const [nuevoAsistente, setNuevoAsistente] = useState<{
@@ -383,16 +384,23 @@
     }
   };
 
-  const totalPages = Math.max(Math.ceil(asistentes.length / itemsPerPage), 1);
+  const filteredAsistentes = asistentes.filter(a => {
+    if (!filterCedula) return true;
+    const cleanSearch = filterCedula.replace(/[\s\.\-]/g, '').toUpperCase();
+    const cleanUserCedula = (a.cedula || '').replace(/[\s\.\-]/g, '').toUpperCase();
+    return cleanUserCedula.includes(cleanSearch);
+  });
+
+  const totalPages = Math.max(Math.ceil(filteredAsistentes.length / itemsPerPage), 1);
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = asistentes.slice(indexOfFirstItem, indexOfLastItem);
+  const currentItems = filteredAsistentes.slice(indexOfFirstItem, indexOfLastItem);
 
   useEffect(() => {
     if (currentPage > totalPages) {
       setCurrentPage(totalPages);
     }
-  }, [asistentes, currentPage, totalPages]);
+  }, [filteredAsistentes, currentPage, totalPages]);
 
   return (
     <div className="space-y-8 animate-slide-up">
@@ -652,9 +660,23 @@
 
         {/* Listado de Asistentes cargados */}
         <div className="lg:col-span-2 bg-[#111a2e] border border-[#1e2d4a] rounded-2xl p-6 space-y-6">
-          <h2 className="text-xl font-bold text-white flex items-center gap-2 border-b border-[#1e2d4a] pb-3">
-            <ClipboardList className="h-5 w-5 text-[#f3af30]" /> Listado de Asistentes e Invitados ({asistentes.length})
-          </h2>
+          <div className="flex flex-col sm:flex-row gap-4 items-center justify-between pb-3 border-b border-[#1e2d4a]">
+            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              <ClipboardList className="h-5 w-5 text-[#f3af30]" /> Listado de Asistentes e Invitados ({filteredAsistentes.length})
+            </h2>
+            <div className="w-full sm:w-72">
+              <input
+                type="text"
+                placeholder="Buscar por cédula..."
+                value={filterCedula}
+                onChange={e => {
+                  setFilterCedula(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-[#60c0ea]"
+              />
+            </div>
+          </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
@@ -674,6 +696,12 @@
                   <tr>
                     <td colSpan={7} className="py-8 text-center text-gray-500">
                       No hay ningún asistente en la base de datos.
+                    </td>
+                  </tr>
+                ) : filteredAsistentes.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-8 text-center text-gray-500">
+                      No se encontraron asistentes con esa cédula.
                     </td>
                   </tr>
                 ) : (
@@ -758,9 +786,9 @@
               <span className="text-gray-400">
                 Mostrando <span className="font-semibold text-white">{indexOfFirstItem + 1}</span> a{' '}
                 <span className="font-semibold text-white">
-                  {Math.min(indexOfLastItem, asistentes.length)}
+                  {Math.min(indexOfLastItem, filteredAsistentes.length)}
                 </span>{' '}
-                de <span className="font-semibold text-white">{asistentes.length}</span> invitados
+                de <span className="font-semibold text-white">{filteredAsistentes.length}</span> invitados
               </span>
               <div className="flex gap-2">
                 <button
