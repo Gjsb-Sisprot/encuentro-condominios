@@ -194,6 +194,18 @@ export default function RegistroPage() {
         available = available.filter(m => m.id !== comp.mesa_id);
       }
     });
+
+    // Fallback: If no tables are available under the preassigned restriction, allow selecting ANY table in the database
+    // that is not currently selected by the president or other companions.
+    if (available.length === 0) {
+      available = [...mesas].filter(m => !selectedMesaIds.includes(m.id));
+      companions.forEach((comp, i) => {
+        if (i !== currentIdx && comp.mesa_id) {
+          available = available.filter(m => m.id !== comp.mesa_id);
+        }
+      });
+    }
+
     return available;
   };
 
@@ -637,6 +649,10 @@ _Nota: Número para solo envío de mensajería masiva - No recibe respuestas_`;
                                   <option key={m.id} value={m.id}>{m.nombre}</option>
                                 ))}
                               </select>
+                              {foundGuest.mesas_preasignadas.length > 0 && 
+                               availableMesas.some(m => !foundGuest.mesas_preasignadas.some(pm => pm.id === m.id)) && (
+                                <p className="text-[10px] text-amber-400 mt-1">⚠️ Sin mesas preasignadas libres. Mostrando mesas de la lista general.</p>
+                              )}
                             </div>
 
                             <div className="flex flex-col gap-2 bg-[#1a2640] p-2 rounded-lg border border-[#1e2d4a]">
