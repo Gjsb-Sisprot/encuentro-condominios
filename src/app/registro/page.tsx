@@ -564,7 +564,7 @@ _Nota: Número para solo envío de mensajería masiva - No recibe respuestas_`;
         >
           <div className="space-y-2">
             <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider">
-              Número de Cédula de Identidad
+              Número de Cédula del presidente del condominio
             </label>
             <div className="relative">
               <input
@@ -593,7 +593,7 @@ _Nota: Número para solo envío de mensajería masiva - No recibe respuestas_`;
             ) : (
               <>
                 <Search className="h-5 w-5" />
-                Buscar Invitado
+                Buscar Presidente
               </>
             )}
           </button>
@@ -627,7 +627,7 @@ _Nota: Número para solo envío de mensajería masiva - No recibe respuestas_`;
                 }}
                 className="w-full py-3 bg-[#111a2e] border border-[#60c0ea]/40 hover:border-[#60c0ea] text-[#60c0ea] hover:text-white font-bold rounded-xl transition-all text-sm"
               >
-                + Registrar nuevo invitado e iniciar asistencia
+                + Registrar nuevo Invitado
               </button>
             </div>
           )}
