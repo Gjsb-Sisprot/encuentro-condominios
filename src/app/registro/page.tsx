@@ -149,6 +149,16 @@ export default function RegistroPage() {
     es_directivo: false,
     cargo_directivo: '',
   });
+  const [editingGuestData, setEditingGuestData] = useState({
+    nombre: '',
+    telefono: '',
+    condominio: '',
+    municipio: 'Girardot',
+    parroquia: 'José Casanova Godoy',
+    es_acompanante: false,
+    es_directivo: false,
+    cargo_directivo: '',
+  });
   
   // Companions state
   const [hasCompanions, setHasCompanions] = useState(false);
@@ -236,6 +246,16 @@ export default function RegistroPage() {
       };
 
       setFoundGuest(guest);
+      setEditingGuestData({
+        nombre: guest.nombre,
+        telefono: guest.telefono || '',
+        condominio: guest.condominio,
+        municipio: guest.municipio,
+        parroquia: guest.parroquia || 'José Casanova Godoy',
+        es_acompanante: guest.es_acompanante || false,
+        es_directivo: guest.es_directivo || false,
+        cargo_directivo: guest.cargo_directivo || '',
+      });
       // Pre-select all his preassigned mesas by default
       setSelectedMesaIds(guest.mesas_preasignadas.map(m => m.id));
       setShowMesaSelection(true);
@@ -314,10 +334,18 @@ export default function RegistroPage() {
     setErrorMsg('');
 
     try {
-      // 1. Update President attendance
+      // 1. Update President attendance and guest info
       const { error: updateError } = await supabase
         .from('asistentes')
         .update({
+          nombre: editingGuestData.nombre,
+          telefono: cleanTelefono(editingGuestData.telefono),
+          condominio: editingGuestData.condominio,
+          municipio: editingGuestData.municipio,
+          parroquia: editingGuestData.parroquia,
+          es_acompanante: editingGuestData.es_acompanante,
+          es_directivo: editingGuestData.es_acompanante ? editingGuestData.es_directivo : false,
+          cargo_directivo: (editingGuestData.es_acompanante && editingGuestData.es_directivo) ? editingGuestData.cargo_directivo : null,
           asistio: true,
           fecha_registro: new Date().toISOString(),
         })
@@ -411,6 +439,14 @@ _Nota: Número para solo envío de mensajería masiva - No recibe respuestas_`;
 
       const updatedGuest = {
         ...foundGuest,
+        nombre: editingGuestData.nombre,
+        telefono: cleanTelefono(editingGuestData.telefono),
+        condominio: editingGuestData.condominio,
+        municipio: editingGuestData.municipio,
+        parroquia: editingGuestData.parroquia,
+        es_acompanante: editingGuestData.es_acompanante,
+        es_directivo: editingGuestData.es_acompanante ? editingGuestData.es_directivo : false,
+        cargo_directivo: editingGuestData.cargo_directivo,
         asistio: true
       };
       setAsistenteInfo(updatedGuest);
@@ -892,11 +928,148 @@ _Nota: Número para solo envío de mensajería masiva - No recibe respuestas_`;
       {/* Paso 2: Selección y Confirmación de Mesa / Acompañantes */}
       {showMesaSelection && foundGuest && (
         <div className="bg-[#111a2e] border border-[#1e2d4a] rounded-2xl p-6 shadow-xl space-y-6 animate-slide-up">
-          <div className="border-b border-[#1e2d4a] pb-4">
-            <span className="text-xs font-semibold text-[#60c0ea] uppercase tracking-wider block">Verificar Participante</span>
-            <h2 className="text-xl font-bold text-white mt-1">{foundGuest.nombre}</h2>
-            <p className="text-gray-400 text-sm mt-0.5">{foundGuest.condominio} | C.I. {foundGuest.cedula}</p>
+          <div className="border-b border-[#1e2d4a] pb-4 space-y-4">
+            <span className="text-xs font-semibold text-[#60c0ea] uppercase tracking-wider block">Verificar y Modificar Datos del Participante</span>
+            
+            {foundGuest.asistio && (
+              <div className="p-4 bg-amber-950/20 border border-amber-900/50 text-amber-200 rounded-xl flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+                <div className="text-sm">
+                  <span className="font-bold block">⚠️ Asistencia ya Registrada</span>
+                  <span>Este participante ya registró su asistencia anteriormente. Puedes modificar sus datos o mesas si lo deseas.</span>
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Nombre Completo *</label>
+                <input
+                  type="text"
+                  required
+                  value={editingGuestData.nombre}
+                  onChange={e => setEditingGuestData({ ...editingGuestData, nombre: e.target.value })}
+                  className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#60c0ea]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Cédula de Identidad</label>
+                <input
+                  type="text"
+                  disabled
+                  value={foundGuest.cedula}
+                  className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-gray-400 text-sm focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Teléfono *</label>
+                <input
+                  type="text"
+                  required
+                  value={editingGuestData.telefono}
+                  onChange={e => setEditingGuestData({ ...editingGuestData, telefono: e.target.value })}
+                  className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#60c0ea]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Condominio *</label>
+                <input
+                  type="text"
+                  required
+                  value={editingGuestData.condominio}
+                  onChange={e => setEditingGuestData({ ...editingGuestData, condominio: e.target.value })}
+                  className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#60c0ea]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Municipio *</label>
+                <select
+                  value={editingGuestData.municipio}
+                  onChange={e => {
+                    const newMuni = e.target.value;
+                    const defaultParroquia = PARROQUIAS_POR_MUNICIPIO[newMuni]?.[0] || '';
+                    setEditingGuestData({ 
+                      ...editingGuestData, 
+                      municipio: newMuni,
+                      parroquia: defaultParroquia
+                    });
+                  }}
+                  className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#60c0ea]"
+                >
+                  {Object.keys(PARROQUIAS_POR_MUNICIPIO).map(muni => (
+                    <option key={muni} value={muni}>{muni}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Parroquia *</label>
+                <select
+                  value={editingGuestData.parroquia}
+                  onChange={e => setEditingGuestData({ ...editingGuestData, parroquia: e.target.value })}
+                  className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#60c0ea]"
+                >
+                  {(PARROQUIAS_POR_MUNICIPIO[editingGuestData.municipio] || []).map(p => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Opción de Acompañante / Directivo */}
+            <div className="space-y-3 pt-2 border-t border-[#1e2d4a]">
+              <label className="flex items-center gap-2 text-sm text-gray-300 hover:text-white cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={editingGuestData.es_acompanante}
+                  onChange={e => setEditingGuestData({ 
+                    ...editingGuestData, 
+                    es_acompanante: e.target.checked,
+                    es_directivo: e.target.checked ? editingGuestData.es_directivo : false,
+                    cargo_directivo: e.target.checked ? editingGuestData.cargo_directivo : ''
+                  })}
+                  className="rounded border-[#1e2d4a] bg-[#111a2e] text-[#60c0ea] focus:ring-0 focus:ring-offset-0"
+                />
+                <span>¿Es Acompañante? (Invitado)</span>
+              </label>
+
+              {editingGuestData.es_acompanante && (
+                <div className="pl-6 space-y-3 border-l-2 border-[#1e2d4a] animate-slide-up">
+                  <label className="flex items-center gap-2 text-sm text-gray-300 hover:text-white cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={editingGuestData.es_directivo}
+                      onChange={e => setEditingGuestData({ 
+                        ...editingGuestData, 
+                        es_directivo: e.target.checked,
+                        cargo_directivo: e.target.checked ? editingGuestData.cargo_directivo : ''
+                      })}
+                      className="rounded border-[#1e2d4a] bg-[#111a2e] text-[#60c0ea] focus:ring-0 focus:ring-offset-0"
+                  />
+                  <span>¿Es Directivo del Condominio?</span>
+                </label>
+
+                {editingGuestData.es_directivo && (
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Cargo Directivo *</label>
+                    <input
+                      type="text"
+                      required
+                      value={editingGuestData.cargo_directivo}
+                      onChange={e => setEditingGuestData({ ...editingGuestData, cargo_directivo: e.target.value })}
+                      className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#60c0ea]"
+                      placeholder="Ej. Vocal, Tesorero, etc."
+                    />
+                  </div>
+                )}
+              </div>
+            )}
           </div>
+        </div>
 
           <div className="space-y-6">
             {/* Mesas del Presidente */}
