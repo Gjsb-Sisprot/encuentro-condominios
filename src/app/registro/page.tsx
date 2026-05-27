@@ -10,6 +10,7 @@ import {
 import { animate } from 'animejs';
 
 interface MesaInfo {
+  id: string;
   numero: number;
   nombre: string;
 }
@@ -21,14 +22,47 @@ interface AsistenteInfo {
   telefono: string;
   condominio: string;
   municipio: string;
-  mesa_preasignada_id: string | null;
   asistio: boolean;
+  es_acompanante?: boolean;
+  es_directivo?: boolean;
+  cargo_directivo?: string | null;
+  mesas_preasignadas: MesaInfo[];
 }
 
 interface DbMesaResponse {
   id: string;
   numero: number;
   nombre: string;
+}
+
+interface DbSearchResponse {
+  id: string;
+  nombre: string;
+  cedula: string;
+  telefono: string;
+  condominio: string;
+  municipio: string;
+  asistio: boolean;
+  es_acompanante: boolean | null;
+  es_directivo: boolean | null;
+  cargo_directivo: string | null;
+  asistente_mesa: {
+    mesa_id: string;
+    mesas_trabajo: {
+      id: string;
+      numero: number;
+      nombre: string;
+    } | null;
+  }[];
+}
+
+interface CompanionInput {
+  nombre: string;
+  cedula: string;
+  telefono: string;
+  mesa_id: string;
+  es_directivo: boolean;
+  cargo_directivo: string;
 }
 
 export default function RegistroPage() {
@@ -42,12 +76,16 @@ export default function RegistroPage() {
   // Step workflow states
   const [foundGuest, setFoundGuest] = useState<AsistenteInfo | null>(null);
   const [showMesaSelection, setShowMesaSelection] = useState(false);
-  const [selectedMesaId, setSelectedMesaId] = useState<string>('');
+  const [selectedMesaIds, setSelectedMesaIds] = useState<string[]>([]);
+  
+  // Companions state
+  const [hasCompanions, setHasCompanions] = useState(false);
+  const [companions, setCompanions] = useState<CompanionInput[]>([]);
   
   // Registration result states
   const [registrado, setRegistrado] = useState(false);
   const [asistenteInfo, setAsistenteInfo] = useState<AsistenteInfo | null>(null);
-  const [mesaAsignada, setMesaAsignada] = useState<MesaInfo | null>(null);
+  const [mesaAsignadaText, setMesaAsignadaText] = useState<string>('');
   const [waStatus, setWaStatus] = useState<{ success: boolean; msg: string } | null>(null);
   
   // Animation refs
@@ -81,13 +119,21 @@ export default function RegistroPage() {
     setRegistrado(false);
     setFoundGuest(null);
     setShowMesaSelection(false);
-    setMesaAsignada(null);
     setWaStatus(null);
+    setHasCompanions(false);
+    setCompanions([]);
 
     try {
       const { data: guests, error: searchError } = await supabase
         .from('asistentes')
-        .select('*')
+        .select(`
+          id, nombre, cedula, telefono, condominio, municipio, asistio,
+          es_acompanante, es_directivo, cargo_directivo,
+          asistente_mesa (
+            mesa_id,
+            mesas_trabajo (id, numero, nombre)
+          )
+        `)
         .eq('cedula', cedula.trim());
 
       if (searchError) throw searchError;
@@ -98,9 +144,26 @@ export default function RegistroPage() {
         return;
       }
 
-      const guest = guests[0] as AsistenteInfo;
+      const rawGuest = guests[0] as unknown as DbSearchResponse;
+      const guest: AsistenteInfo = {
+        id: rawGuest.id,
+        nombre: rawGuest.nombre,
+        cedula: rawGuest.cedula,
+        telefono: rawGuest.telefono,
+        condominio: rawGuest.condominio,
+        municipio: rawGuest.municipio,
+        asistio: rawGuest.asistio,
+        es_acompanante: rawGuest.es_acompanante || false,
+        es_directivo: rawGuest.es_directivo || false,
+        cargo_directivo: rawGuest.cargo_directivo,
+        mesas_preasignadas: (rawGuest.asistente_mesa || [])
+          .map(am => am.mesas_trabajo)
+          .filter((m): m is MesaInfo => m !== null)
+      };
+
       setFoundGuest(guest);
-      setSelectedMesaId(guest.mesa_preasignada_id || '');
+      // Pre-select all his preassigned mesas by default
+      setSelectedMesaIds(guest.mesas_preasignadas.map(m => m.id));
       setShowMesaSelection(true);
     } catch (error) {
       console.error(error);
@@ -110,22 +173,62 @@ export default function RegistroPage() {
     }
   };
 
-  // Confirm registration and selected mesa
+  // Get available tables for companion idx dynamically
+  const getAvailableMesasForCompanion = (currentIdx: number) => {
+    if (!foundGuest) return [];
+    // Start with all preassigned mesas of the president
+    let available = [...foundGuest.mesas_preasignadas];
+    // Filter out mesas selected by the president
+    available = available.filter(m => !selectedMesaIds.includes(m.id));
+    // Filter out mesas selected by other companions
+    companions.forEach((comp, i) => {
+      if (i !== currentIdx && comp.mesa_id) {
+        available = available.filter(m => m.id !== comp.mesa_id);
+      }
+    });
+    return available;
+  };
+
+  const handleAddCompanion = () => {
+    setCompanions([
+      ...companions,
+      {
+        nombre: '',
+        cedula: '',
+        telefono: '',
+        mesa_id: '',
+        es_directivo: false,
+        cargo_directivo: ''
+      }
+    ]);
+  };
+
+  const handleRemoveCompanion = (index: number) => {
+    setCompanions(companions.filter((_, i) => i !== index));
+  };
+
+  const handleCompanionChange = (index: number, field: keyof CompanionInput, value: string | boolean) => {
+    const updated = [...companions];
+    updated[index] = { ...updated[index], [field]: value } as CompanionInput;
+    setCompanions(updated);
+  };
+
+  // Confirm registration
   const handleConfirmRegistration = async () => {
-    if (!foundGuest || !selectedMesaId) return;
+    if (!foundGuest) return;
+    if (selectedMesaIds.length === 0 && (!hasCompanions || companions.length === 0)) {
+      setErrorMsg('El presidente debe seleccionar al menos una mesa, o registrar acompañantes en las mesas asignadas.');
+      return;
+    }
 
     setLoading(true);
     setErrorMsg('');
 
     try {
-      const chosenMesa = mesas.find(m => m.id === selectedMesaId);
-      if (!chosenMesa) throw new Error('Mesa seleccionada no válida');
-
-      // Update db
+      // 1. Update President attendance
       const { error: updateError } = await supabase
         .from('asistentes')
         .update({
-          mesa_preasignada_id: selectedMesaId,
           asistio: true,
           fecha_registro: new Date().toISOString(),
         })
@@ -133,36 +236,112 @@ export default function RegistroPage() {
 
       if (updateError) throw updateError;
 
-      const updatedGuest = {
-        ...foundGuest,
-        mesa_preasignada_id: selectedMesaId,
-        asistio: true
-      };
+      // 2. Clear old mesa relationships for president and re-insert chosen ones
+      await supabase.from('asistente_mesa').delete().eq('asistente_id', foundGuest.id);
+      if (selectedMesaIds.length > 0) {
+        const rels = selectedMesaIds.map(mId => ({
+          asistente_id: foundGuest.id,
+          mesa_id: mId
+        }));
+        const { error: insertRelsError } = await supabase.from('asistente_mesa').insert(rels);
+        if (insertRelsError) throw insertRelsError;
+      }
 
-      setAsistenteInfo(updatedGuest);
-      setMesaAsignada({
-        numero: chosenMesa.numero,
-        nombre: chosenMesa.nombre
-      });
-      setShowMesaSelection(false);
-      setRegistrado(true);
+      // 3. Register Companions
+      if (hasCompanions && companions.length > 0) {
+        for (const comp of companions) {
+          if (!comp.nombre || !comp.cedula || !comp.telefono || !comp.mesa_id) {
+            throw new Error(`Por favor, complete todos los datos requeridos del acompañante: ${comp.nombre || 'Sin nombre'}.`);
+          }
 
-      // Send WhatsApp
-      if (updatedGuest.telefono) {
-        const customMessage = `Hola, *${updatedGuest.nombre}*;
+          // Insert companion row
+          const compPayload = {
+            nombre: comp.nombre,
+            cedula: comp.cedula,
+            telefono: comp.telefono,
+            condominio: foundGuest.condominio,
+            municipio: foundGuest.municipio,
+            asistio: true,
+            es_acompanante: true,
+            invitado_por_id: foundGuest.id,
+            es_directivo: comp.es_directivo,
+            cargo_directivo: comp.es_directivo ? comp.cargo_directivo : null,
+            fecha_registro: new Date().toISOString()
+          };
+
+          const { data: insertedComp, error: compErr } = await supabase
+            .from('asistentes')
+            .insert([compPayload])
+            .select('id');
+
+          if (compErr) throw compErr;
+          if (!insertedComp || insertedComp.length === 0) throw new Error('Error al registrar acompañante.');
+
+          const companionId = insertedComp[0].id;
+
+          // Insert companion mesa relationship
+          const { error: compRelErr } = await supabase
+            .from('asistente_mesa')
+            .insert([{
+              asistente_id: companionId,
+              mesa_id: comp.mesa_id
+            }]);
+          if (compRelErr) throw compRelErr;
+
+          // Send WhatsApp to Companion
+          const chosenMesa = mesas.find(m => m.id === comp.mesa_id);
+          const companionMessage = `Hola, *${comp.nombre}*;
 
 Bienvenido a la *MESA DE LOS SERVICIOS PÚBLICOS CONDOMINIALES DEL MUNICIPIO GIRARDOT*
 
 En nombre de nuestra Gobernadora Joana Sánchez queremos darte la cordial bienvenida. 
 
 📌 Has sido asignado a la:
-*Mesa ${chosenMesa.numero}: ${chosenMesa.nombre}*
+*${chosenMesa?.nombre || 'Mesa de Trabajo'}*
+
+Tu participación como acompañante y representante de la comunidad *${foundGuest.condominio}* es sumamente valiosa para nosotros.
+
+Sin duda alguna, ¡Aragua nos une, y siempre nos vamos a encontrar! Eres Gente de Bien, HACIÉNDOLO BIEN! 🚀`;
+
+          const waResultComp = await evolutionService.sendWhatsAppMessage(comp.telefono, companionMessage);
+          if (waResultComp.success) {
+            await supabase.from('asistentes').update({ whatsapp_status: 'enviado' }).eq('id', companionId);
+          } else {
+            await supabase.from('asistentes').update({ whatsapp_status: 'error', whatsapp_error: waResultComp.error }).eq('id', companionId);
+          }
+        }
+      }
+
+      // Format mesas text for confirmation screen
+      const selectedMesasData = mesas.filter(m => selectedMesaIds.includes(m.id));
+      const mesasString = selectedMesasData.map(m => m.nombre).join(', ');
+      setMesaAsignadaText(mesasString || 'Delegado en Acompañantes');
+
+      const updatedGuest = {
+        ...foundGuest,
+        asistio: true
+      };
+      setAsistenteInfo(updatedGuest);
+      setShowMesaSelection(false);
+      setRegistrado(true);
+
+      // Send WhatsApp to President
+      if (updatedGuest.telefono && selectedMesaIds.length > 0) {
+        const mesasStringWA = selectedMesasData.map(m => `*${m.nombre}*`).join('\n');
+        const customMessage = `Hola, *${updatedGuest.nombre}*;
+
+Bienvenido a la *MESA DE LOS SERVICIOS PÚBLICOS CONDOMINIALES DEL MUNICIPIO GIRARDOT*
+
+En nombre de nuestra Gobernadora Joana Sánchez queremos darte la cordial bienvenida. 
+
+📌 Has sido asignado a:
+${mesasStringWA}
 
 Tu participación en representación de la comunidad *${updatedGuest.condominio}* es sumamente valiosa para nosotros.
 
 Sin duda alguna, ¡Aragua nos une, y siempre nos vamos a encontrar! Eres Gente de Bien, HACIÉNDOLO BIEN! 🚀`;
 
-        setWaStatus({ success: false, msg: 'Enviando mensaje de confirmación...' });
+        setWaStatus({ success: false, msg: 'Enviando mensaje de confirmación al presidente...' });
         const waResult = await evolutionService.sendWhatsAppMessage(updatedGuest.telefono, customMessage);
 
         if (waResult.success) {
@@ -182,7 +361,7 @@ Sin duda alguna, ¡Aragua nos une, y siempre nos vamos a encontrar! Eres Gente d
             .eq('id', updatedGuest.id);
         }
       } else {
-        setWaStatus({ success: false, msg: 'No se pudo enviar WhatsApp: Teléfono no disponible.' });
+        setWaStatus({ success: false, msg: 'Presidente registrado. Sin envío de WhatsApp (no seleccionó mesa o no posee teléfono).' });
       }
 
     } catch (error) {
@@ -208,7 +387,7 @@ Sin duda alguna, ¡Aragua nos une, y siempre nos vamos a encontrar! Eres Gente d
   }, [registrado]);
 
   return (
-    <div className="max-w-2xl mx-auto space-y-8 py-6">
+    <div className="max-w-3xl mx-auto space-y-8 py-6">
       {/* Encabezado */}
       <div className="text-center space-y-2">
         <div className="inline-flex items-center justify-center h-16 w-16 rounded-2xl bg-[#004e74]/20 text-[#60c0ea] mb-3">
@@ -275,7 +454,7 @@ Sin duda alguna, ¡Aragua nos une, y siempre nos vamos a encontrar! Eres Gente d
         </form>
       )}
 
-      {/* Paso 2: Selección y Confirmación de Mesa */}
+      {/* Paso 2: Selección y Confirmación de Mesa / Acompañantes */}
       {showMesaSelection && foundGuest && (
         <div className="bg-[#111a2e] border border-[#1e2d4a] rounded-2xl p-6 shadow-xl space-y-6 animate-slide-up">
           <div className="border-b border-[#1e2d4a] pb-4">
@@ -284,24 +463,175 @@ Sin duda alguna, ¡Aragua nos une, y siempre nos vamos a encontrar! Eres Gente d
             <p className="text-gray-400 text-sm mt-0.5">{foundGuest.condominio} | C.I. {foundGuest.cedula}</p>
           </div>
 
-          <div className="space-y-5">
+          <div className="space-y-6">
+            {/* Mesas del Presidente */}
             <div>
-              <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
-                Asignación de Mesa de Trabajo
+              <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                ¿A qué mesas asistirá personalmente el Presidente?
               </label>
-              <select
-                value={selectedMesaId}
-                onChange={e => setSelectedMesaId(e.target.value)}
-                className="w-full bg-[#1a2640] border border-[#1e2d4a] text-white rounded-xl px-4 py-3.5 focus:outline-none focus:border-[#60c0ea] focus:ring-1 focus:ring-[#60c0ea] transition-all text-sm"
-              >
-                <option value="" disabled>Seleccione una mesa...</option>
-                {mesas.map(m => (
-                  <option key={m.id} value={m.id}>
-                    Mesa {m.numero}: {m.nombre}
-                  </option>
-                ))}
-              </select>
+              {foundGuest.mesas_preasignadas.length === 0 ? (
+                <p className="text-gray-500 text-sm">El presidente no tiene mesas preasignadas en el sistema.</p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-[#1a2640] p-4 rounded-xl border border-[#1e2d4a]">
+                  {foundGuest.mesas_preasignadas.map(m => {
+                    const isChecked = selectedMesaIds.includes(m.id);
+                    return (
+                      <label key={m.id} className="flex items-center gap-3 text-sm text-gray-300 hover:text-white cursor-pointer py-1.5 px-2.5 rounded hover:bg-[#111a2e] transition-colors">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => {
+                            if (isChecked) {
+                              setSelectedMesaIds(selectedMesaIds.filter(id => id !== m.id));
+                            } else {
+                              setSelectedMesaIds([...selectedMesaIds, m.id]);
+                            }
+                          }}
+                          className="rounded border-[#1e2d4a] bg-[#111a2e] text-[#60c0ea] focus:ring-0 focus:ring-offset-0"
+                        />
+                        <span>{m.nombre}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
             </div>
+
+            {/* Toggle Acompañantes */}
+            <div className="flex items-center justify-between p-4 bg-[#1a2640]/55 rounded-xl border border-[#1e2d4a]">
+              <div>
+                <span className="text-sm font-bold text-white block">¿Viene con acompañantes?</span>
+                <span className="text-xs text-gray-400 block">Permite designar acompañantes a las mesas de trabajo libres del presidente.</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setHasCompanions(!hasCompanions);
+                  if (!hasCompanions) setCompanions([]);
+                }}
+                className={`px-4 py-2 text-xs font-black rounded-lg uppercase tracking-wider transition-all border ${
+                  hasCompanions 
+                    ? 'bg-emerald-600/20 text-emerald-400 border-emerald-500/40' 
+                    : 'bg-[#111a2e] text-gray-400 border-gray-700'
+                }`}
+              >
+                {hasCompanions ? 'Sí' : 'No'}
+              </button>
+            </div>
+
+            {/* Formulario Dinámico de Acompañantes */}
+            {hasCompanions && (
+              <div className="space-y-4 border-t border-[#1e2d4a] pt-4 animate-slide-up">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider">Acompañantes Designados</h3>
+                  <button
+                    type="button"
+                    onClick={handleAddCompanion}
+                    className="px-3 py-1.5 text-xs bg-[#004e74] hover:bg-[#004e74]/80 text-white font-bold rounded-lg transition-all"
+                  >
+                    + Agregar Acompañante
+                  </button>
+                </div>
+
+                {companions.length === 0 ? (
+                  <p className="text-gray-500 text-xs py-4 text-center">No has agregado acompañantes aún. Presiona el botón para agregar uno.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {companions.map((comp, idx) => {
+                      const availableMesas = getAvailableMesasForCompanion(idx);
+                      return (
+                        <div key={idx} className="p-4 bg-[#0b111e] border border-[#1e2d4a] rounded-xl relative space-y-3">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveCompanion(idx)}
+                            className="absolute top-2 right-2 text-gray-400 hover:text-red-400 text-xs"
+                            title="Eliminar acompañante"
+                          >
+                            Eliminar
+                          </button>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <div>
+                              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Nombre Completo *</label>
+                              <input
+                                type="text"
+                                required
+                                value={comp.nombre}
+                                onChange={e => handleCompanionChange(idx, 'nombre', e.target.value)}
+                                className="w-full bg-[#1a2640] border border-[#1e2d4a] text-white rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-[#60c0ea]"
+                                placeholder="Nombre completo"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Cédula *</label>
+                              <input
+                                type="text"
+                                required
+                                value={comp.cedula}
+                                onChange={e => handleCompanionChange(idx, 'cedula', e.target.value)}
+                                className="w-full bg-[#1a2640] border border-[#1e2d4a] text-white rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-[#60c0ea]"
+                                placeholder="Ej. V12345678"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Teléfono *</label>
+                              <input
+                                type="text"
+                                required
+                                value={comp.telefono}
+                                onChange={e => handleCompanionChange(idx, 'telefono', e.target.value)}
+                                className="w-full bg-[#1a2640] border border-[#1e2d4a] text-white rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-[#60c0ea]"
+                                placeholder="Ej. 04141234567"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+                            <div>
+                              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Mesa de Trabajo *</label>
+                              <select
+                                required
+                                value={comp.mesa_id}
+                                onChange={e => handleCompanionChange(idx, 'mesa_id', e.target.value)}
+                                className="w-full bg-[#1a2640] border border-[#1e2d4a] text-white rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-[#60c0ea]"
+                              >
+                                <option value="" disabled>Seleccione mesa...</option>
+                                {availableMesas.map(m => (
+                                  <option key={m.id} value={m.id}>{m.nombre}</option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div className="flex flex-col gap-2 bg-[#1a2640] p-2 rounded-lg border border-[#1e2d4a]">
+                              <label className="flex items-center gap-2 text-[10px] font-bold text-gray-300 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={comp.es_directivo}
+                                  onChange={e => handleCompanionChange(idx, 'es_directivo', e.target.checked)}
+                                  className="rounded border-[#1e2d4a] bg-[#111a2e] text-[#60c0ea] focus:ring-0 focus:ring-offset-0"
+                                />
+                                <span>¿Es Directivo del Condominio?</span>
+                              </label>
+
+                              {comp.es_directivo && (
+                                <input
+                                  type="text"
+                                  required
+                                  value={comp.cargo_directivo}
+                                  onChange={e => handleCompanionChange(idx, 'cargo_directivo', e.target.value)}
+                                  placeholder="Escriba su cargo (Ej. Vocero, Secretario)"
+                                  className="w-full bg-[#111a2e] border border-[#1e2d4a] text-white rounded-md px-2 py-1 text-[10px] focus:outline-none focus:border-[#60c0ea]"
+                                />
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {errorMsg && (
               <div className="p-3 bg-red-950/20 border border-red-900/50 text-red-200 rounded-xl flex items-start gap-2.5 text-xs">
@@ -325,7 +655,7 @@ Sin duda alguna, ¡Aragua nos une, y siempre nos vamos a encontrar! Eres Gente d
               <button
                 type="button"
                 onClick={handleConfirmRegistration}
-                disabled={loading || !selectedMesaId}
+                disabled={loading}
                 className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm flex items-center justify-center gap-1.5"
               >
                 {loading && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -337,7 +667,7 @@ Sin duda alguna, ¡Aragua nos une, y siempre nos vamos a encontrar! Eres Gente d
       )}
 
       {/* Paso 3: Confirmación de Registro Exitoso */}
-      {registrado && asistenteInfo && mesaAsignada && (
+      {registrado && asistenteInfo && (
         <div 
           ref={cardRef}
           className="bg-[#111a2e] border border-emerald-500/30 rounded-2xl p-8 shadow-2xl space-y-6 text-center"
@@ -354,9 +684,8 @@ Sin duda alguna, ¡Aragua nos une, y siempre nos vamos a encontrar! Eres Gente d
 
           <div className="p-6 bg-[#0b111e] border border-[#1e2d4a] rounded-xl flex flex-col items-center gap-2">
             <MapPin className="h-6 w-6 text-[#60c0ea]" />
-            <span className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Mesa de Trabajo</span>
-            <span className="text-2xl font-black text-white">Mesa {mesaAsignada.numero}</span>
-            <span className="text-sm text-gray-300 font-medium">{mesaAsignada.nombre}</span>
+            <span className="text-xs text-gray-400 font-semibold uppercase tracking-wider">Mesas de Trabajo Registradas</span>
+            <span className="text-sm text-gray-200 font-bold max-w-md">{mesaAsignadaText}</span>
           </div>
 
           {/* Estado de notificación de Whatsapp */}
@@ -377,7 +706,7 @@ Sin duda alguna, ¡Aragua nos une, y siempre nos vamos a encontrar! Eres Gente d
               setRegistrado(false);
               setCedula('');
               setAsistenteInfo(null);
-              setMesaAsignada(null);
+              setMesaAsignadaText('');
               setWaStatus(null);
             }}
             className="w-full py-3 bg-[#1a2640] hover:bg-[#1a2640]/80 text-white font-bold rounded-xl transition-all"

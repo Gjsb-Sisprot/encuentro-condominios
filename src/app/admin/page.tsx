@@ -21,13 +21,15 @@ interface Asistente {
   condominio: string;
   municipio: string;
   asistio: boolean;
-  mesa_preasignada_id: string | null;
+  es_acompanante?: boolean;
+  es_directivo?: boolean;
+  cargo_directivo?: string | null;
   whatsapp_status: string;
   whatsapp_error?: string;
-  mesas_trabajo?: {
+  mesas_asignadas: {
     numero: number;
     nombre: string;
-  } | null;
+  }[];
 }
 
 interface DbAsistenteJoin {
@@ -38,13 +40,17 @@ interface DbAsistenteJoin {
   condominio: string;
   municipio: string;
   asistio: boolean;
-  mesa_preasignada_id: string | null;
+  es_acompanante: boolean | null;
+  es_directivo: boolean | null;
+  cargo_directivo: string | null;
   whatsapp_status: string;
   whatsapp_error: string | null;
-  mesas_trabajo: {
-    numero: number;
-    nombre: string;
-  } | null;
+  asistente_mesa: {
+    mesas_trabajo: {
+      numero: number;
+      nombre: string;
+    } | null;
+  }[];
 }
 
 export default function AdminPage() {
@@ -56,13 +62,20 @@ export default function AdminPage() {
   const [successMsg, setSuccessMsg] = useState('');
 
   // Form states for manual attendee
-  const [nuevoAsistente, setNuevoAsistente] = useState({
+  const [nuevoAsistente, setNuevoAsistente] = useState<{
+    nombre: string;
+    cedula: string;
+    telefono: string;
+    condominio: string;
+    municipio: string;
+    mesa_preasignada_ids: string[];
+  }>({
     nombre: '',
     cedula: '',
     telefono: '',
     condominio: '',
     municipio: 'Mariño',
-    mesa_preasignada_id: '',
+    mesa_preasignada_ids: [],
   });
 
   const fetchData = async () => {
@@ -76,13 +89,16 @@ export default function AdminPage() {
       if (errorMesas) throw errorMesas;
       setMesas(dataMesas as Mesa[] || []);
 
-      // Fetch Asistentes (joined with mesas)
+      // Fetch Asistentes (joined with their assigned mesas through asistente_mesa)
       const { data: dataAsistentes, error: errorAsistentes } = await supabase
         .from('asistentes')
         .select(`
           id, nombre, cedula, telefono, condominio, municipio, asistio, 
-          mesa_preasignada_id, whatsapp_status, whatsapp_error,
-          mesas_trabajo (numero, nombre)
+          es_acompanante, es_directivo, cargo_directivo,
+          whatsapp_status, whatsapp_error,
+          asistente_mesa (
+            mesas_trabajo (numero, nombre)
+          )
         `)
         .order('created_at', { ascending: false });
       
@@ -98,13 +114,14 @@ export default function AdminPage() {
         condominio: item.condominio,
         municipio: item.municipio,
         asistio: item.asistio,
-        mesa_preasignada_id: item.mesa_preasignada_id,
+        es_acompanante: item.es_acompanante || false,
+        es_directivo: item.es_directivo || false,
+        cargo_directivo: item.cargo_directivo,
         whatsapp_status: item.whatsapp_status,
         whatsapp_error: item.whatsapp_error || undefined,
-        mesas_trabajo: item.mesas_trabajo ? {
-          numero: item.mesas_trabajo.numero,
-          nombre: item.mesas_trabajo.nombre
-        } : null
+        mesas_asignadas: (item.asistente_mesa || [])
+          .map(am => am.mesas_trabajo)
+          .filter((m): m is { numero: number; nombre: string } => m !== null)
       }));
 
       setAsistentes(formatted);
@@ -249,12 +266,29 @@ export default function AdminPage() {
         telefono: nuevoAsistente.telefono,
         condominio: nuevoAsistente.condominio,
         municipio: nuevoAsistente.municipio,
-        mesa_preasignada_id: nuevoAsistente.mesa_preasignada_id || null,
         asistio: false,
       };
 
-      const { error } = await supabase.from('asistentes').insert([payload]);
+      const { data, error } = await supabase
+        .from('asistentes')
+        .insert([payload])
+        .select('id');
+
       if (error) throw error;
+      if (!data || data.length === 0) throw new Error('No se pudo recuperar el ID del asistente insertado.');
+
+      const asistenteId = data[0].id;
+
+      if (nuevoAsistente.mesa_preasignada_ids.length > 0) {
+        const relations = nuevoAsistente.mesa_preasignada_ids.map(mesaId => ({
+          asistente_id: asistenteId,
+          mesa_id: mesaId
+        }));
+        const { error: relError } = await supabase
+          .from('asistente_mesa')
+          .insert(relations);
+        if (relError) throw relError;
+      }
 
       setSuccessMsg(`Presidente ${nuevoAsistente.nombre} registrado con éxito.`);
       setNuevoAsistente({
@@ -263,7 +297,7 @@ export default function AdminPage() {
         telefono: '',
         condominio: '',
         municipio: 'Mariño',
-        mesa_preasignada_id: '',
+        mesa_preasignada_ids: [],
       });
       fetchData();
     } catch (err) {
@@ -444,17 +478,35 @@ export default function AdminPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Mesa Preasignada</label>
-              <select
-                value={nuevoAsistente.mesa_preasignada_id}
-                onChange={e => setNuevoAsistente({ ...nuevoAsistente, mesa_preasignada_id: e.target.value })}
-                className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#60c0ea]"
-              >
-                <option value="">Ninguna (Asignación automática)</option>
-                {mesas.map(m => (
-                  <option key={m.id} value={m.id}>Mesa {m.numero} ({m.nombre})</option>
-                ))}
-              </select>
+              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Mesas Preasignadas</label>
+              <div className="space-y-2 bg-[#1a2640] border border-[#1e2d4a] rounded-lg p-3 max-h-48 overflow-y-auto">
+                {mesas.map(m => {
+                  const isChecked = nuevoAsistente.mesa_preasignada_ids.includes(m.id);
+                  return (
+                    <label key={m.id} className="flex items-center gap-2 text-sm text-gray-300 hover:text-white cursor-pointer py-1">
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => {
+                          if (isChecked) {
+                            setNuevoAsistente({
+                              ...nuevoAsistente,
+                              mesa_preasignada_ids: nuevoAsistente.mesa_preasignada_ids.filter(id => id !== m.id)
+                            });
+                          } else {
+                            setNuevoAsistente({
+                              ...nuevoAsistente,
+                              mesa_preasignada_ids: [...nuevoAsistente.mesa_preasignada_ids, m.id]
+                            });
+                          }
+                        }}
+                        className="rounded border-[#1e2d4a] bg-[#111a2e] text-[#60c0ea] focus:ring-0 focus:ring-offset-0"
+                      />
+                      <span>Mesa {m.numero} ({m.nombre})</span>
+                    </label>
+                  );
+                })}
+              </div>
             </div>
 
             <button
@@ -480,7 +532,7 @@ export default function AdminPage() {
                   <th className="py-3 px-2">Cédula</th>
                   <th className="py-3 px-2">Nombre</th>
                   <th className="py-3 px-2">Condominio</th>
-                  <th className="py-3 px-2">Mesa Preasignada</th>
+                  <th className="py-3 px-2">Mesas Preasignadas</th>
                   <th className="py-3 px-2">Asistió</th>
                   <th className="py-3 px-2">Notificación WA</th>
                 </tr>
@@ -495,20 +547,35 @@ export default function AdminPage() {
                 ) : (
                   asistentes.map(a => (
                     <tr key={a.id} className="hover:bg-[#15223e] transition-colors">
-                      <td className="py-3 px-2 font-mono font-medium">{a.cedula}</td>
+                      <td className="py-3 px-2 font-mono font-medium">{a.cedula || 'N/A'}</td>
                       <td className="py-3 px-2">
-                        <div className="font-semibold text-white">{a.nombre}</div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-white">{a.nombre}</span>
+                          {a.es_acompanante ? (
+                            <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-amber-950/40 text-amber-400 border border-amber-900/60" title={a.es_directivo ? `Directivo: ${a.cargo_directivo}` : 'Acompañante'}>
+                              Acompañante {a.es_directivo && `(${a.cargo_directivo})`}
+                            </span>
+                          ) : (
+                            <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-[#004e74]/20 text-[#60c0ea] border border-[#004e74]/40">
+                              Presidente
+                            </span>
+                          )}
+                        </div>
                         <div className="text-xs text-gray-400">{a.municipio} | {a.telefono}</div>
                       </td>
                       <td className="py-3 px-2 max-w-[150px] truncate">{a.condominio}</td>
                       <td className="py-3 px-2 text-xs">
-                        {a.mesas_trabajo ? (
-                          <span className="px-2 py-1 rounded bg-[#004e74]/20 border border-[#004e74]/40 text-[#60c0ea]">
-                            Mesa {a.mesas_trabajo.numero}
-                          </span>
-                        ) : (
-                          <span className="text-gray-500">No asignada</span>
-                        )}
+                        <div className="flex flex-wrap gap-1">
+                          {a.mesas_asignadas && a.mesas_asignadas.length > 0 ? (
+                            a.mesas_asignadas.map((m, idx) => (
+                              <span key={idx} className="px-2 py-0.5 rounded bg-[#004e74]/20 border border-[#004e74]/40 text-[#60c0ea]" title={m.nombre}>
+                                Mesa {m.numero}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-gray-500">No asignada</span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-3 px-2">
                         {a.asistio ? (

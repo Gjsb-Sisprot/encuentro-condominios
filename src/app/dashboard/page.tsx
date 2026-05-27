@@ -18,12 +18,12 @@ interface AsistenteConMesa {
   nombre: string;
   municipio: string;
   asistio: boolean;
-  mesa_preasignada_id: string | null;
-  mesas_trabajo: {
+  es_acompanante: boolean;
+  mesas_asignadas: {
     id: string;
     numero: number;
     nombre: string;
-  } | null;
+  }[];
 }
 
 interface DbAsistenteJoin {
@@ -31,12 +31,14 @@ interface DbAsistenteJoin {
   nombre: string;
   municipio: string;
   asistio: boolean;
-  mesa_preasignada_id: string | null;
-  mesas_trabajo: {
-    id: string;
-    numero: number;
-    nombre: string;
-  } | null;
+  es_acompanante: boolean | null;
+  asistente_mesa: {
+    mesas_trabajo: {
+      id: string;
+      numero: number;
+      nombre: string;
+    } | null;
+  }[];
 }
 
 interface MesaStats {
@@ -44,6 +46,8 @@ interface MesaStats {
   numero: number;
   nombre: string;
   totalAsistieron: number;
+  totalPresidentes: number;
+  totalAcompanantes: number;
   porMunicipio: { [municipio: string]: number };
 }
 
@@ -63,12 +67,14 @@ export default function DashboardPage() {
         .order('numero', { ascending: true });
       setMesas((dbMesas || []) as Mesa[]);
 
-      // Fetch all assistants with check-in status and pre-assigned tables
+      // Fetch all assistants with check-in status and their assigned tables through asistente_mesa
       const { data: dbAsistentes } = await supabase
         .from('asistentes')
         .select(`
-          id, nombre, municipio, asistio, mesa_preasignada_id,
-          mesas_trabajo (id, numero, nombre)
+          id, nombre, municipio, asistio, es_acompanante,
+          asistente_mesa (
+            mesas_trabajo (id, numero, nombre)
+          )
         `);
       
       const rawList = (dbAsistentes || []) as unknown as DbAsistenteJoin[];
@@ -77,12 +83,10 @@ export default function DashboardPage() {
         nombre: item.nombre,
         municipio: item.municipio,
         asistio: item.asistio,
-        mesa_preasignada_id: item.mesa_preasignada_id,
-        mesas_trabajo: item.mesas_trabajo ? {
-          id: item.mesas_trabajo.id,
-          numero: item.mesas_trabajo.numero,
-          nombre: item.mesas_trabajo.nombre
-        } : null
+        es_acompanante: item.es_acompanante || false,
+        mesas_asignadas: (item.asistente_mesa || [])
+          .map(am => am.mesas_trabajo)
+          .filter((m): m is { id: string; numero: number; nombre: string } => m !== null)
       }));
 
       setAsistentes(formatted);
@@ -114,10 +118,13 @@ export default function DashboardPage() {
   }, []);
 
   // Aggregations
-  const totalInvitados = asistentes.length;
+  // Let's define total official guests (presidents) pre-registered:
+  const totalInvitados = asistentes.filter(a => !a.es_acompanante).length;
+  // Total people who checked-in
   const totalAsistieron = asistentes.filter(a => a.asistio).length;
+  // Percentage calculated against registered presidents
   const porcentajeAsistencia = totalInvitados > 0 
-    ? Math.round((totalAsistieron / totalInvitados) * 100) 
+    ? Math.round((asistentes.filter(a => !a.es_acompanante && a.asistio).length / totalInvitados) * 100) 
     : 0;
 
   // Group stats by work table (mesa)
@@ -130,18 +137,29 @@ export default function DashboardPage() {
       numero: m.numero,
       nombre: m.nombre,
       totalAsistieron: 0,
+      totalPresidentes: 0,
+      totalAcompanantes: 0,
       porMunicipio: {}
     };
   });
 
   // Aggregate attendee data
   asistentes.forEach(a => {
-    if (a.asistio && a.mesa_preasignada_id && mesaStatsMap[a.mesa_preasignada_id]) {
-      const stats = mesaStatsMap[a.mesa_preasignada_id];
-      stats.totalAsistieron += 1;
-      
-      const mun = a.municipio || 'No especificado';
-      stats.porMunicipio[mun] = (stats.porMunicipio[mun] || 0) + 1;
+    if (a.asistio) {
+      a.mesas_asignadas.forEach(m => {
+        if (mesaStatsMap[m.id]) {
+          const stats = mesaStatsMap[m.id];
+          stats.totalAsistieron += 1;
+          if (a.es_acompanante) {
+            stats.totalAcompanantes += 1;
+          } else {
+            stats.totalPresidentes += 1;
+          }
+          
+          const mun = a.municipio || 'No especificado';
+          stats.porMunicipio[mun] = (stats.porMunicipio[mun] || 0) + 1;
+        }
+      });
     }
   });
 
@@ -150,11 +168,14 @@ export default function DashboardPage() {
   // Group global check-ins by municipality
   const municipioStats: { [municipio: string]: { total: number; asistieron: number } } = {};
   asistentes.forEach(a => {
+    // Only count registered presidents for municipal percentages or all? Let's count presidents as total base
     const mun = a.municipio || 'No especificado';
     if (!municipioStats[mun]) {
       municipioStats[mun] = { total: 0, asistieron: 0 };
     }
-    municipioStats[mun].total += 1;
+    if (!a.es_acompanante) {
+      municipioStats[mun].total += 1;
+    }
     if (a.asistio) {
       municipioStats[mun].asistieron += 1;
     }
@@ -239,9 +260,19 @@ export default function DashboardPage() {
                         <span className="font-bold text-white block">Mesa {mesa.numero}</span>
                         <span className="text-xs text-gray-400">{mesa.nombre}</span>
                       </div>
-                      <span className="px-3 py-1 rounded-full bg-[#004e74]/20 border border-[#004e74]/40 text-xs font-bold text-[#60c0ea]">
-                        {mesa.totalAsistieron} Asistentes
-                      </span>
+                      <div className="flex flex-col items-end gap-1">
+                        <span className="px-3 py-1 rounded-full bg-[#004e74]/20 border border-[#004e74]/40 text-xs font-bold text-[#60c0ea]">
+                          {mesa.totalAsistieron} Asistentes
+                        </span>
+                        <div className="flex gap-2 text-[10px] font-semibold">
+                          <span className="text-emerald-400 bg-emerald-950/20 px-1.5 py-0.5 rounded border border-emerald-900/40">
+                            Presidentes: {mesa.totalPresidentes}
+                          </span>
+                          <span className="text-amber-400 bg-amber-950/20 px-1.5 py-0.5 rounded border border-amber-900/40">
+                            Invitados: {mesa.totalAcompanantes}
+                          </span>
+                        </div>
+                      </div>
                     </div>
 
                     {/* Barra de progreso */}

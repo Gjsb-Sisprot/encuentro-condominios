@@ -33,12 +33,23 @@ CREATE TABLE IF NOT EXISTS asistentes (
     estado TEXT,
     municipio TEXT NOT NULL,
     parroquia TEXT,
-    mesa_preasignada_id UUID REFERENCES mesas_trabajo(id) ON DELETE SET NULL,
+    mesa_preasignada_id UUID REFERENCES mesas_trabajo(id) ON DELETE SET NULL, -- Deprecado a favor de asistente_mesa, pero mantenido para compatibilidad
     asistio BOOLEAN DEFAULT FALSE NOT NULL,
     fecha_registro TIMESTAMPTZ,
     whatsapp_status TEXT DEFAULT 'no_enviado', -- 'no_enviado', 'enviado', 'error'
     whatsapp_error TEXT,
+    es_acompanante BOOLEAN DEFAULT FALSE,
+    invitado_por_id UUID REFERENCES asistentes(id) ON DELETE CASCADE,
+    es_directivo BOOLEAN DEFAULT FALSE,
+    cargo_directivo TEXT,
     created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- 4b. Relación Muchos a Muchos: asistentes <-> mesas_trabajo
+CREATE TABLE IF NOT EXISTS asistente_mesa (
+    asistente_id UUID REFERENCES asistentes(id) ON DELETE CASCADE,
+    mesa_id UUID REFERENCES mesas_trabajo(id) ON DELETE CASCADE,
+    PRIMARY KEY (asistente_id, mesa_id)
 );
 
 -- Habilitar Row Level Security (RLS) si es necesario, o deshabilitar para simplificar el acceso local directo
@@ -46,12 +57,14 @@ ALTER TABLE servicios ENABLE ROW LEVEL SECURITY;
 ALTER TABLE mesas_trabajo ENABLE ROW LEVEL SECURITY;
 ALTER TABLE mesa_servicio ENABLE ROW LEVEL SECURITY;
 ALTER TABLE asistentes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE asistente_mesa ENABLE ROW LEVEL SECURITY;
 
 -- Crear políticas de acceso libre para lectura y escritura (simplificado para el encuentro)
 CREATE POLICY "Permitir todo a servicios" ON servicios FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Permitir todo a mesas_trabajo" ON mesas_trabajo FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Permitir todo a mesa_servicio" ON mesa_servicio FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Permitir todo a asistentes" ON asistentes FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Permitir todo a asistente_mesa" ON asistente_mesa FOR ALL USING (true) WITH CHECK (true);
 
 -- Insertar Datos Semilla de Prueba
 
