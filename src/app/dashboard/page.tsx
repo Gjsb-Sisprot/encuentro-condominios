@@ -19,6 +19,10 @@ interface AsistenteConMesa {
   municipio: string;
   asistio: boolean;
   es_acompanante: boolean;
+  condominio: string;
+  telefono: string;
+  es_directivo: boolean;
+  cargo_directivo: string | null;
   mesas_asignadas: {
     id: string;
     numero: number;
@@ -32,6 +36,10 @@ interface DbAsistenteJoin {
   municipio: string;
   asistio: boolean;
   es_acompanante: boolean | null;
+  condominio: string;
+  telefono: string;
+  es_directivo: boolean | null;
+  cargo_directivo: string | null;
   asistente_mesa: {
     mesas_trabajo: {
       id: string;
@@ -55,6 +63,7 @@ export default function DashboardPage() {
   const [asistentes, setAsistentes] = useState<AsistenteConMesa[]>([]);
   const [mesas, setMesas] = useState<Mesa[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedMesaIdForDetail, setSelectedMesaIdForDetail] = useState<string | null>(null);
 
   const fetchData = async () => {
     try {
@@ -67,11 +76,11 @@ export default function DashboardPage() {
         .order('numero', { ascending: true });
       setMesas((dbMesas || []) as Mesa[]);
 
-      // Fetch all assistants with check-in status and their assigned tables through asistente_mesa
+      // Fetch all assistants with check-in status, contact info, and their assigned tables through asistente_mesa
       const { data: dbAsistentes } = await supabase
         .from('asistentes')
         .select(`
-          id, nombre, municipio, asistio, es_acompanante,
+          id, nombre, municipio, asistio, es_acompanante, condominio, telefono, es_directivo, cargo_directivo,
           asistente_mesa (
             mesas_trabajo (id, numero, nombre)
           )
@@ -84,6 +93,10 @@ export default function DashboardPage() {
         municipio: item.municipio,
         asistio: item.asistio,
         es_acompanante: item.es_acompanante || false,
+        condominio: item.condominio,
+        telefono: item.telefono,
+        es_directivo: item.es_directivo || false,
+        cargo_directivo: item.cargo_directivo,
         mesas_asignadas: (item.asistente_mesa || [])
           .map(am => am.mesas_trabajo)
           .filter((m): m is { id: string; numero: number; nombre: string } => m !== null)
@@ -239,11 +252,16 @@ export default function DashboardPage() {
         
         {/* Panel Izquierdo: Quórum de Asistencia por Mesa */}
         <div className="lg:col-span-2 bg-[#111a2e] border border-[#1e2d4a] rounded-2xl p-6 space-y-6">
-          <h2 className="text-xl font-bold text-white flex items-center gap-2 border-b border-[#1e2d4a] pb-3">
-            <Layers className="h-5 w-5 text-[#60c0ea]" /> Distribución de Asistentes por Mesa
-          </h2>
+          <div>
+            <h2 className="text-xl font-bold text-white flex items-center gap-2 border-b border-[#1e2d4a] pb-3">
+              <Layers className="h-5 w-5 text-[#60c0ea]" /> Distribución de Asistentes por Mesa
+            </h2>
+            <p className="text-xs text-gray-400 mt-2">
+              Haz clic en cualquier mesa de trabajo para ver el listado detallado de asistentes abajo.
+            </p>
+          </div>
 
-          <div className="space-y-6">
+          <div className="space-y-4">
             {mesaStatsList.length === 0 ? (
               <div className="py-12 text-center text-gray-500 text-sm">
                 No hay mesas de trabajo creadas en la base de datos.
@@ -252,9 +270,18 @@ export default function DashboardPage() {
               mesaStatsList.map(mesa => {
                 const maxCap = Math.max(...mesaStatsList.map(m => m.totalAsistieron), 10);
                 const percentBar = Math.round((mesa.totalAsistieron / maxCap) * 100);
+                const isSelected = selectedMesaIdForDetail === mesa.id;
                 
                 return (
-                  <div key={mesa.id} className="space-y-2">
+                  <div 
+                    key={mesa.id} 
+                    onClick={() => setSelectedMesaIdForDetail(isSelected ? null : mesa.id)}
+                    className={`space-y-2 cursor-pointer p-3 rounded-xl transition-all border ${
+                      isSelected 
+                        ? 'bg-[#1a2640]/80 border-[#60c0ea]/60 shadow-lg shadow-[#004e74]/10' 
+                        : 'bg-transparent border-transparent hover:bg-[#1a2640]/40 hover:border-[#1e2d4a]'
+                    }`}
+                  >
                     <div className="flex justify-between items-start">
                       <div>
                         <span className="font-bold text-white block">Mesa {mesa.numero}</span>
@@ -343,6 +370,78 @@ export default function DashboardPage() {
         </div>
 
       </div>
+
+      {/* Detalle de Asistentes por Mesa seleccionada */}
+      {selectedMesaIdForDetail && (
+        (() => {
+          const selectedMesa = mesas.find(m => m.id === selectedMesaIdForDetail);
+          const detailList = asistentes.filter(a => a.asistio && a.mesas_asignadas.some(m => m.id === selectedMesaIdForDetail));
+          
+          return selectedMesa ? (
+            <div className="bg-[#111a2e] border border-[#1e2d4a] rounded-2xl p-6 space-y-4 animate-slide-up">
+              <div className="flex justify-between items-center border-b border-[#1e2d4a] pb-3">
+                <div>
+                  <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                    <Users className="h-5 w-5 text-[#60c0ea]" /> Asistentes de la {selectedMesa.nombre}
+                  </h2>
+                  <p className="text-gray-400 text-xs mt-1">
+                    Listado completo de personas registradas que participan en esta mesa.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setSelectedMesaIdForDetail(null)}
+                  className="text-xs text-gray-400 hover:text-white px-2.5 py-1.5 rounded-lg bg-[#1a2640] border border-[#1e2d4a] transition-all"
+                >
+                  Cerrar Detalle
+                </button>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-[#1e2d4a] text-gray-400">
+                      <th className="py-2.5 px-2">Nombre</th>
+                      <th className="py-2.5 px-2">Perfil</th>
+                      <th className="py-2.5 px-2">Condominio</th>
+                      <th className="py-2.5 px-2">Municipio</th>
+                      <th className="py-2.5 px-2">Teléfono</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#1e2d4a]">
+                    {detailList.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="py-8 text-center text-gray-500">
+                          No hay ningún asistente registrado en esta mesa de trabajo.
+                        </td>
+                      </tr>
+                    ) : (
+                      detailList.map(a => (
+                        <tr key={a.id} className="hover:bg-[#15223e] transition-colors">
+                          <td className="py-3 px-2 font-medium text-white">{a.nombre}</td>
+                          <td className="py-3 px-2">
+                            {a.es_acompanante ? (
+                              <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-amber-950/40 text-amber-400 border border-amber-900/60" title={a.es_directivo ? `Directivo: ${a.cargo_directivo}` : 'Acompañante'}>
+                                Acompañante {a.es_directivo && `(${a.cargo_directivo})`}
+                              </span>
+                            ) : (
+                              <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-[#004e74]/20 text-[#60c0ea] border border-[#004e74]/40">
+                                Presidente
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-2 text-gray-300 max-w-[200px] truncate">{a.condominio}</td>
+                          <td className="py-3 px-2 text-gray-300">{a.municipio}</td>
+                          <td className="py-3 px-2 font-mono text-gray-300">{a.telefono}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : null;
+        })()
+      )}
     </div>
   );
 }
