@@ -294,6 +294,15 @@
             .from('asistente_mesa')
             .insert(relations);
           if (relError) throw relError;
+
+          const { error: updateError } = await supabase
+            .from('asistentes')
+            .update({
+              asistio: true,
+              fecha_registro: new Date().toISOString(),
+            })
+            .eq('id', editingAsistenteId);
+          if (updateError) throw updateError;
         }
 
         setSuccessMsg(`Asistente "${nuevoAsistente.nombre}" actualizado con éxito.`);

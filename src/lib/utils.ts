@@ -1,3 +1,13 @@
+interface AsistentePresencia {
+  asistio: boolean;
+  mesas_asignadas?: { id: string }[];
+}
+
+/** Presente si hizo check-in digital o tiene al menos una mesa asignada en el evento. */
+export function estaPresenteEnEvento(asistente: AsistentePresencia): boolean {
+  return asistente.asistio || (asistente.mesas_asignadas?.length ?? 0) > 0;
+}
+
 export function cleanCedula(cedula: string): string {
   if (!cedula) return '';
   // Remove spaces, dots, dashes
@@ -11,6 +21,34 @@ export function cleanCedula(cedula: string): string {
     return `V-${clean}`;
   }
   return clean;
+}
+
+function getSessionCookieSuffix(): string {
+  if (typeof window === 'undefined') return '';
+  return window.location.protocol === 'https:' ? '; Secure' : '';
+}
+
+export function setSessionActive(active: boolean): void {
+  if (typeof document === 'undefined') return;
+
+  const suffix = getSessionCookieSuffix();
+
+  if (active) {
+    document.cookie = `session_active=true; path=/; max-age=86400; SameSite=Lax${suffix}`;
+    return;
+  }
+
+  document.cookie = `session_active=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax${suffix}`;
+}
+
+export function hasActiveSession(): boolean {
+  if (typeof document === 'undefined') return false;
+
+  const sessionCookie = document.cookie
+    .split('; ')
+    .find((row) => row.startsWith('session_active='));
+
+  return sessionCookie?.split('=')[1] === 'true';
 }
 
 export function cleanTelefono(telefono: string): string {

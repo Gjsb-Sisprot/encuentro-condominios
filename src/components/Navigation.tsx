@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { setSessionActive } from '@/lib/utils';
 import { 
   ClipboardCheck, BarChart3, Settings, ShieldAlert, LogOut, User
 } from 'lucide-react';
@@ -52,7 +53,7 @@ export default function Navigation() {
     } catch (e) {
       console.error(e);
     }
-    document.cookie = "session_active=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax; Secure";
+    setSessionActive(false);
     if (typeof window !== 'undefined') {
       localStorage.removeItem('user_name');
     }

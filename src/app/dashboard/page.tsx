@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import { estaPresenteEnEvento } from '@/lib/utils';
 import { 
   Users, UserCheck, Percent, BarChart3, 
   MapPin, RefreshCw, Layers, Pencil 
@@ -139,6 +140,15 @@ export default function DashboardPage() {
            .from('asistente_mesa')
            .insert(relations);
          if (insertError) throw insertError;
+
+         const { error: updateError } = await supabase
+           .from('asistentes')
+           .update({
+             asistio: true,
+             fecha_registro: new Date().toISOString(),
+           })
+           .eq('id', editingAsistente.id);
+         if (updateError) throw updateError;
        }
 
        await fetchData();
@@ -206,9 +216,9 @@ export default function DashboardPage() {
     };
   });
 
-  // Aggregate attendee data
+  // Aggregate attendee data (presente = check-in digital o mesa asignada)
   asistentesFiltrados.forEach(a => {
-    if (a.asistio) {
+    if (estaPresenteEnEvento(a)) {
       a.mesas_asignadas.forEach(m => {
         if (mesaStatsMap[m.id]) {
           const stats = mesaStatsMap[m.id];
@@ -236,7 +246,7 @@ export default function DashboardPage() {
       municipioStats[mun] = { total: 0, asistieron: 0 };
     }
     municipioStats[mun].total += 1;
-    if (a.asistio) {
+    if (estaPresenteEnEvento(a)) {
       municipioStats[mun].asistieron += 1;
     }
   });
@@ -249,7 +259,7 @@ export default function DashboardPage() {
       parroquiaStats[parr] = { total: 0, asistieron: 0 };
     }
     parroquiaStats[parr].total += 1;
-    if (a.asistio) {
+    if (estaPresenteEnEvento(a)) {
       parroquiaStats[parr].asistieron += 1;
     }
   });
@@ -334,13 +344,13 @@ export default function DashboardPage() {
             <span className="text-xs font-bold text-gray-400 uppercase tracking-wider block">Presidentes</span>
             <div className="flex items-baseline gap-2">
               <span className="text-4xl font-extrabold text-white">
-                {asistentes.filter(a => !a.es_acompanante && a.asistio).length}
+                {asistentes.filter(a => !a.es_acompanante && estaPresenteEnEvento(a)).length}
               </span>
               <span className="text-sm text-gray-400">
                 de {asistentes.filter(a => !a.es_acompanante).length}
               </span>
             </div>
-            <span className="text-xs text-gray-500 block">Presidentes que asistieron</span>
+            <span className="text-xs text-gray-500 block">Presidentes con mesa asignada o check-in</span>
           </div>
           <div className={`h-12 w-12 rounded-xl flex items-center justify-center transition-colors ${
             filtro === 'presidentes' ? 'bg-[#004e74] text-white' : 'bg-[#004e74]/20 text-[#60c0ea]'
@@ -363,9 +373,9 @@ export default function DashboardPage() {
           <div className="space-y-1">
             <span className="text-xs font-bold text-gray-400 uppercase tracking-wider block">Invitados</span>
             <span className="text-4xl font-extrabold text-emerald-400">
-              {asistentes.filter(a => a.es_acompanante && a.asistio).length}
+              {asistentes.filter(a => a.es_acompanante && estaPresenteEnEvento(a)).length}
             </span>
-            <span className="text-xs text-gray-500 block">Acompañantes registrados</span>
+            <span className="text-xs text-gray-500 block">Acompañantes con mesa asignada o check-in</span>
           </div>
           <div className={`h-12 w-12 rounded-xl flex items-center justify-center transition-colors ${
             filtro === 'invitados' ? 'bg-emerald-600 text-white' : 'bg-emerald-950/20 text-emerald-400'
@@ -388,9 +398,9 @@ export default function DashboardPage() {
           <div className="space-y-1">
             <span className="text-xs font-bold text-gray-400 uppercase tracking-wider block">Totales por todo</span>
             <span className="text-4xl font-extrabold text-[#f3af30]">
-              {asistentes.filter(a => a.asistio).length}
+              {asistentes.filter(a => estaPresenteEnEvento(a)).length}
             </span>
-            <span className="text-xs text-gray-500 block">Total general en el encuentro</span>
+            <span className="text-xs text-gray-500 block">Personas con mesa asignada o check-in</span>
           </div>
           <div className={`h-12 w-12 rounded-xl flex items-center justify-center transition-colors ${
             filtro === 'todos' ? 'bg-[#f3af30] text-black' : 'bg-amber-950/20 text-[#f3af30]'
@@ -574,7 +584,9 @@ export default function DashboardPage() {
       {selectedMesaIdForDetail && (
         (() => {
           const selectedMesa = mesas.find(m => m.id === selectedMesaIdForDetail);
-          const detailList = asistentesFiltrados.filter(a => a.asistio && a.mesas_asignadas.some(m => m.id === selectedMesaIdForDetail));
+          const detailList = asistentesFiltrados.filter(
+            a => estaPresenteEnEvento(a) && a.mesas_asignadas.some(m => m.id === selectedMesaIdForDetail)
+          );
           
           return selectedMesa ? (
             <div className="bg-[#111a2e] border border-[#1e2d4a] rounded-2xl p-6 space-y-4 animate-slide-up">

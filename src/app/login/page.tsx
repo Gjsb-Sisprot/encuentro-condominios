@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
+import { hasActiveSession, setSessionActive } from '@/lib/utils';
 import { ShieldCheck, Lock, Mail, Loader2, AlertCircle } from 'lucide-react';
 
 export default function LoginPage() {
@@ -13,9 +14,8 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const isLocalActive = document.cookie.split('; ').find(row => row.startsWith('session_active='));
-    if (isLocalActive && isLocalActive.split('=')[1] === 'true') {
-      router.push('/dashboard');
+    if (hasActiveSession()) {
+      router.replace('/dashboard');
     }
   }, [router]);
 
@@ -55,12 +55,10 @@ export default function LoginPage() {
         throw new Error('Su usuario responsable se encuentra inactivo.');
       }
 
-      // Successful login
-      document.cookie = "session_active=true; path=/; max-age=86400; SameSite=Lax; Secure";
+      setSessionActive(true);
       localStorage.setItem('user_name', responsibleData.full_name || responsibleData.email || email);
 
-      router.push('/dashboard');
-      router.refresh();
+      router.replace('/dashboard');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Ocurrió un error inesperado');
     } finally {
