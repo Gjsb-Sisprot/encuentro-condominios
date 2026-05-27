@@ -642,7 +642,12 @@
                  disabled={loading}
                  className="w-full py-2 bg-[#004e74] hover:bg-[#004e74]/80 text-white font-bold text-sm rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
                >
-                 {editingAsistenteId ? 'Guardar Cambios' : 'Registrar Presidente'}
+                 {editingAsistenteId 
+                   ? 'Guardar Cambios' 
+                   : nuevoAsistente.es_acompanante 
+                     ? 'Registrar Acompañante' 
+                     : 'Registrar Presidente'
+                 }
                </button>
  
                {editingAsistenteId && (
