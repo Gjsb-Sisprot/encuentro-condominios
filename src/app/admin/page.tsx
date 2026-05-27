@@ -554,52 +554,47 @@
                 </select>
               </div>
  
-             {/* Opción de Acompañante / Directivo */}
+             {/* Opción de Cargo / Rol */}
              <div className="space-y-3 pt-2 border-t border-[#1e2d4a]">
-               <label className="flex items-center gap-2 text-sm text-gray-300 hover:text-white cursor-pointer">
-                 <input
-                   type="checkbox"
-                   checked={nuevoAsistente.es_acompanante}
-                   onChange={e => setNuevoAsistente({ 
-                     ...nuevoAsistente, 
-                     es_acompanante: e.target.checked,
-                     es_directivo: e.target.checked ? nuevoAsistente.es_directivo : false,
-                     cargo_directivo: e.target.checked ? nuevoAsistente.cargo_directivo : ''
-                   })}
-                   className="rounded border-[#1e2d4a] bg-[#111a2e] text-[#60c0ea] focus:ring-0 focus:ring-offset-0"
-                 />
-                 <span>¿Es Acompañante? (Invitado)</span>
-               </label>
+               <div>
+                 <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Cargo / Tipo de Invitado *</label>
+                 <select
+                   value={
+                     nuevoAsistente.es_acompanante 
+                       ? (nuevoAsistente.es_directivo ? 'directivo' : 'acompanante')
+                       : 'presidente'
+                   }
+                   onChange={e => {
+                     const val = e.target.value;
+                     if (val === 'presidente') {
+                       setNuevoAsistente({ ...nuevoAsistente, es_acompanante: false, es_directivo: false, cargo_directivo: '' });
+                     } else if (val === 'acompanante') {
+                       setNuevoAsistente({ ...nuevoAsistente, es_acompanante: true, es_directivo: false, cargo_directivo: '' });
+                     } else if (val === 'directivo') {
+                       setNuevoAsistente({ ...nuevoAsistente, es_acompanante: true, es_directivo: true, cargo_directivo: '' });
+                     }
+                   }}
+                   className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#60c0ea]"
+                 >
+                   <option value="presidente">Presidente de Condominio</option>
+                   <option value="directivo">Directivo del Condominio</option>
+                   <option value="acompanante">Acompañante / Invitado</option>
+                 </select>
+               </div>
  
-               {nuevoAsistente.es_acompanante && (
-                 <div className="pl-6 space-y-3 border-l-2 border-[#1e2d4a] animate-slide-down">
-                   <label className="flex items-center gap-2 text-sm text-gray-300 hover:text-white cursor-pointer">
+               {nuevoAsistente.es_directivo && (
+                 <div className="space-y-3 animate-slide-up">
+                   <div>
+                     <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Cargo Directivo Especifico *</label>
                      <input
-                       type="checkbox"
-                       checked={nuevoAsistente.es_directivo}
-                       onChange={e => setNuevoAsistente({ 
-                         ...nuevoAsistente, 
-                         es_directivo: e.target.checked,
-                         cargo_directivo: e.target.checked ? nuevoAsistente.cargo_directivo : ''
-                       })}
-                       className="rounded border-[#1e2d4a] bg-[#111a2e] text-[#60c0ea] focus:ring-0 focus:ring-offset-0"
+                       type="text"
+                       required
+                       value={nuevoAsistente.cargo_directivo}
+                       onChange={e => setNuevoAsistente({ ...nuevoAsistente, cargo_directivo: e.target.value })}
+                       className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#60c0ea]"
+                       placeholder="Ej. Vocal, Tesorero, Administrador, etc."
                      />
-                     <span>¿Es Directivo del Condominio?</span>
-                   </label>
- 
-                   {nuevoAsistente.es_directivo && (
-                     <div>
-                       <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Cargo Directivo *</label>
-                       <input
-                         type="text"
-                         required
-                         value={nuevoAsistente.cargo_directivo}
-                         onChange={e => setNuevoAsistente({ ...nuevoAsistente, cargo_directivo: e.target.value })}
-                         className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#60c0ea]"
-                         placeholder="Ej. Vocal, Tesorero, etc."
-                       />
-                     </div>
-                   )}
+                   </div>
                  </div>
                )}
              </div>

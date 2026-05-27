@@ -817,52 +817,47 @@ _Nota: Número para solo envío de mensajería masiva - No recibe respuestas_`;
             </div>
           </div>
 
-          {/* Opción de Acompañante / Directivo */}
+          {/* Opción de Cargo / Rol */}
           <div className="space-y-3 pt-2 border-t border-[#1e2d4a]">
-            <label className="flex items-center gap-2 text-sm text-gray-300 hover:text-white cursor-pointer">
-              <input
-                type="checkbox"
-                checked={nuevoGuest.es_acompanante}
-                onChange={e => setNuevoGuest({ 
-                  ...nuevoGuest, 
-                  es_acompanante: e.target.checked,
-                  es_directivo: e.target.checked ? nuevoGuest.es_directivo : false,
-                  cargo_directivo: e.target.checked ? nuevoGuest.cargo_directivo : ''
-                })}
-                className="rounded border-[#1e2d4a] bg-[#111a2e] text-[#60c0ea] focus:ring-0 focus:ring-offset-0"
-              />
-              <span>¿Es Acompañante? (Invitado)</span>
-            </label>
+            <div>
+              <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Cargo / Tipo de Invitado *</label>
+              <select
+                value={
+                  nuevoGuest.es_acompanante 
+                    ? (nuevoGuest.es_directivo ? 'directivo' : 'acompanante')
+                    : 'presidente'
+                }
+                onChange={e => {
+                  const val = e.target.value;
+                  if (val === 'presidente') {
+                    setNuevoGuest({ ...nuevoGuest, es_acompanante: false, es_directivo: false, cargo_directivo: '' });
+                  } else if (val === 'acompanante') {
+                    setNuevoGuest({ ...nuevoGuest, es_acompanante: true, es_directivo: false, cargo_directivo: '' });
+                  } else if (val === 'directivo') {
+                    setNuevoGuest({ ...nuevoGuest, es_acompanante: true, es_directivo: true, cargo_directivo: '' });
+                  }
+                }}
+                className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#60c0ea]"
+              >
+                <option value="presidente">Presidente de Condominio</option>
+                <option value="directivo">Directivo del Condominio</option>
+                <option value="acompanante">Acompañante / Invitado</option>
+              </select>
+            </div>
 
-            {nuevoGuest.es_acompanante && (
-              <div className="pl-6 space-y-3 border-l-2 border-[#1e2d4a] animate-slide-up">
-                <label className="flex items-center gap-2 text-sm text-gray-300 hover:text-white cursor-pointer">
+            {nuevoGuest.es_directivo && (
+              <div className="space-y-3 animate-slide-up">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Cargo Directivo Especifico *</label>
                   <input
-                    type="checkbox"
-                    checked={nuevoGuest.es_directivo}
-                    onChange={e => setNuevoGuest({ 
-                      ...nuevoGuest, 
-                      es_directivo: e.target.checked,
-                      cargo_directivo: e.target.checked ? nuevoGuest.cargo_directivo : ''
-                    })}
-                    className="rounded border-[#1e2d4a] bg-[#111a2e] text-[#60c0ea] focus:ring-0 focus:ring-offset-0"
+                    type="text"
+                    required
+                    value={nuevoGuest.cargo_directivo}
+                    onChange={e => setNuevoGuest({ ...nuevoGuest, cargo_directivo: e.target.value })}
+                    className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#60c0ea]"
+                    placeholder="Ej. Vocal, Tesorero, Administrador, etc."
                   />
-                  <span>¿Es Directivo del Condominio?</span>
-                </label>
-
-                {nuevoGuest.es_directivo && (
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Cargo Directivo *</label>
-                    <input
-                      type="text"
-                      required
-                      value={nuevoGuest.cargo_directivo}
-                      onChange={e => setNuevoGuest({ ...nuevoGuest, cargo_directivo: e.target.value })}
-                      className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#60c0ea]"
-                      placeholder="Ej. Vocal, Tesorero, etc."
-                    />
-                  </div>
-                )}
+                </div>
               </div>
             )}
           </div>
@@ -1020,55 +1015,50 @@ _Nota: Número para solo envío de mensajería masiva - No recibe respuestas_`;
               </div>
             </div>
 
-            {/* Opción de Acompañante / Directivo */}
+            {/* Opción de Cargo / Rol */}
             <div className="space-y-3 pt-2 border-t border-[#1e2d4a]">
-              <label className="flex items-center gap-2 text-sm text-gray-300 hover:text-white cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={editingGuestData.es_acompanante}
-                  onChange={e => setEditingGuestData({ 
-                    ...editingGuestData, 
-                    es_acompanante: e.target.checked,
-                    es_directivo: e.target.checked ? editingGuestData.es_directivo : false,
-                    cargo_directivo: e.target.checked ? editingGuestData.cargo_directivo : ''
-                  })}
-                  className="rounded border-[#1e2d4a] bg-[#111a2e] text-[#60c0ea] focus:ring-0 focus:ring-offset-0"
-                />
-                <span>¿Es Acompañante? (Invitado)</span>
-              </label>
+              <div>
+                <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Cargo / Tipo de Invitado *</label>
+                <select
+                  value={
+                    editingGuestData.es_acompanante 
+                      ? (editingGuestData.es_directivo ? 'directivo' : 'acompanante')
+                      : 'presidente'
+                  }
+                  onChange={e => {
+                    const val = e.target.value;
+                    if (val === 'presidente') {
+                      setEditingGuestData({ ...editingGuestData, es_acompanante: false, es_directivo: false, cargo_directivo: '' });
+                    } else if (val === 'acompanante') {
+                      setEditingGuestData({ ...editingGuestData, es_acompanante: true, es_directivo: false, cargo_directivo: '' });
+                    } else if (val === 'directivo') {
+                      setEditingGuestData({ ...editingGuestData, es_acompanante: true, es_directivo: true, cargo_directivo: '' });
+                    }
+                  }}
+                  className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#60c0ea]"
+                >
+                  <option value="presidente">Presidente de Condominio</option>
+                  <option value="directivo">Directivo del Condominio</option>
+                  <option value="acompanante">Acompañante / Invitado</option>
+                </select>
+              </div>
 
-              {editingGuestData.es_acompanante && (
-                <div className="pl-6 space-y-3 border-l-2 border-[#1e2d4a] animate-slide-up">
-                  <label className="flex items-center gap-2 text-sm text-gray-300 hover:text-white cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={editingGuestData.es_directivo}
-                      onChange={e => setEditingGuestData({ 
-                        ...editingGuestData, 
-                        es_directivo: e.target.checked,
-                        cargo_directivo: e.target.checked ? editingGuestData.cargo_directivo : ''
-                      })}
-                      className="rounded border-[#1e2d4a] bg-[#111a2e] text-[#60c0ea] focus:ring-0 focus:ring-offset-0"
-                  />
-                  <span>¿Es Directivo del Condominio?</span>
-                </label>
-
-                {editingGuestData.es_directivo && (
+              {editingGuestData.es_directivo && (
+                <div className="space-y-3 animate-slide-up">
                   <div>
-                    <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Cargo Directivo *</label>
+                    <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Cargo Directivo Especifico *</label>
                     <input
                       type="text"
                       required
                       value={editingGuestData.cargo_directivo}
                       onChange={e => setEditingGuestData({ ...editingGuestData, cargo_directivo: e.target.value })}
                       className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#60c0ea]"
-                      placeholder="Ej. Vocal, Tesorero, etc."
+                      placeholder="Ej. Vocal, Tesorero, Administrador, etc."
                     />
                   </div>
-                )}
-              </div>
-            )}
-          </div>
+                </div>
+              )}
+            </div>
         </div>
 
           <div className="space-y-6">
