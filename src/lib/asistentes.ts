@@ -30,15 +30,25 @@ export function getCedulaSearchVariants(cedula: string): string[] {
 export async function findAsistenteByCedula<T>(
   supabase: SupabaseClient,
   cedula: string,
-  select: string
+  select: string,
+  jornada?: string
 ): Promise<{ data: T | null; error: Error | null }> {
   const variants = getCedulaSearchVariants(cedula);
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("asistentes")
     .select(select)
-    .in("cedula", variants)
-    .limit(1);
+    .in("cedula", variants);
+
+  if (jornada) {
+    if (jornada === 'Jornada General') {
+      query = query.or('estado.is.null,estado.not.ilike.%|%,estado.ilike.%|Jornada General');
+    } else {
+      query = query.ilike('estado', `%|${jornada}`);
+    }
+  }
+
+  const { data, error } = await query.limit(1);
 
   if (error) {
     return { data: null, error };

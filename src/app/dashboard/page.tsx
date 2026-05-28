@@ -73,6 +73,24 @@ export default function DashboardPage() {
    const [editingMesaIds, setEditingMesaIds] = useState<string[]>([]);
    const [savingMesa, setSavingMesa] = useState(false);
    const [detailPage, setDetailPage] = useState(1);
+   const [activeJornada, setActiveJornada] = useState<string>('Jornada General');
+
+   useEffect(() => {
+     if (typeof window !== 'undefined') {
+       const saved = localStorage.getItem('active_jornada') || 'Jornada General';
+       setActiveJornada(saved);
+     }
+
+     const onJornadaChanged = (e: Event) => {
+       const customEvent = e as CustomEvent<string>;
+       setActiveJornada(customEvent.detail);
+     };
+
+     window.addEventListener('jornadaChanged', onJornadaChanged);
+     return () => {
+       window.removeEventListener('jornadaChanged', onJornadaChanged);
+     };
+   }, []);
  
    const fetchData = async () => {
      try {
@@ -86,14 +104,24 @@ export default function DashboardPage() {
        setMesas((dbMesas || []) as Mesa[]);
  
        // Fetch all assistants with check-in status, contact info, and their assigned tables through asistente_mesa
-       const { data: dbAsistentes } = await supabase
+       let query = supabase
          .from('asistentes')
          .select(`
-           id, nombre, municipio, parroquia, asistio, es_acompanante, condominio, telefono, es_directivo, cargo_directivo,
+           id, nombre, municipio, parroquia, asistio, es_acompanante, condominio, telefono, es_directivo, cargo_directivo, estado,
            asistente_mesa (
              mesas_trabajo (id, numero, nombre)
            )
          `);
+
+       if (activeJornada) {
+         if (activeJornada === 'Jornada General') {
+           query = query.or('estado.is.null,estado.not.ilike.%|%,estado.ilike.%|Jornada General');
+         } else {
+           query = query.ilike('estado', `%|${activeJornada}`);
+         }
+       }
+
+       const { data: dbAsistentes } = await query;
        
        const rawList = (dbAsistentes || []) as unknown as DbAsistenteJoin[];
        const formatted: AsistenteConMesa[] = rawList.map((item) => ({
@@ -210,7 +238,7 @@ export default function DashboardPage() {
        supabase.removeChannel(channelAsistentes);
        supabase.removeChannel(channelAsistenteMesa);
      };
-   }, []);
+   }, [activeJornada]);
 
    useEffect(() => {
      setDetailPage(1);

@@ -83,6 +83,7 @@ interface AsistenteInfo {
   municipio: string;
   parroquia?: string | null;
   asistio: boolean;
+  estado?: string | null;
   es_acompanante?: boolean;
   es_directivo?: boolean;
   cargo_directivo?: string | null;
@@ -181,10 +182,28 @@ export default function RegistroPage() {
   const [asistenteInfo, setAsistenteInfo] = useState<AsistenteInfo | null>(null);
   const [mesaAsignadaText, setMesaAsignadaText] = useState<string>('');
   const [waStatus, setWaStatus] = useState<{ success: boolean; msg: string } | null>(null);
-  
+  const [activeJornada, setActiveJornada] = useState<string>('Jornada General');
+
   // Animation refs
   const cardRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('active_jornada') || 'Jornada General';
+      setActiveJornada(saved);
+    }
+
+    const onJornadaChanged = (e: Event) => {
+      const customEvent = e as CustomEvent<string>;
+      setActiveJornada(customEvent.detail);
+    };
+
+    window.addEventListener('jornadaChanged', onJornadaChanged);
+    return () => {
+      window.removeEventListener('jornadaChanged', onJornadaChanged);
+    };
+  }, []);
 
   // Fetch mesas and registered condominios on load
   useEffect(() => {
@@ -202,10 +221,20 @@ export default function RegistroPage() {
     }
 
     async function fetchCondominios() {
-      const { data, error } = await supabase
+      let query = supabase
         .from('asistentes')
-        .select('condominio, municipio, parroquia')
+        .select('condominio, municipio, parroquia, estado')
         .not('condominio', 'is', null);
+
+      if (activeJornada) {
+        if (activeJornada === 'Jornada General') {
+          query = query.or('estado.is.null,estado.not.ilike.%|%,estado.ilike.%|Jornada General');
+        } else {
+          query = query.ilike('estado', `%|${activeJornada}`);
+        }
+      }
+
+      const { data, error } = await query;
       if (data) {
         const uniqueMap = new Map<string, RegisteredCondominio>();
         (data as { condominio: string | null; municipio: string | null; parroquia: string | null }[]).forEach((item) => {
@@ -232,7 +261,7 @@ export default function RegistroPage() {
 
     fetchMesas();
     fetchCondominios();
-  }, []);
+  }, [activeJornada]);
 
   const REGISTRO_SELECT = `
     id, nombre, cedula, telefono, condominio, municipio, parroquia, asistio,
@@ -298,7 +327,8 @@ export default function RegistroPage() {
       const { data: matchedGuest, error: searchError } = await findAsistenteByCedula<DbSearchResponse>(
         supabase,
         cedula,
-        REGISTRO_SELECT
+        REGISTRO_SELECT,
+        activeJornada
       );
 
       if (searchError) throw searchError;
@@ -402,6 +432,10 @@ export default function RegistroPage() {
     setErrorMsg('');
 
     try {
+      const prevParts = (foundGuest.estado || '').split('|');
+      const prevStatus = prevParts[0] || '';
+      const newEstado = `${prevStatus}|${activeJornada}`;
+
       // 1. Update President attendance and guest info
       const { error: updateError } = await supabase
         .from('asistentes')
@@ -416,6 +450,7 @@ export default function RegistroPage() {
           cargo_directivo: (editingGuestData.es_acompanante && editingGuestData.es_directivo) ? editingGuestData.cargo_directivo : null,
           asistio: true,
           fecha_registro: new Date().toISOString(),
+          estado: newEstado
         })
         .eq('id', foundGuest.id);
 
@@ -452,7 +487,8 @@ export default function RegistroPage() {
             invitado_por_id: foundGuest.id,
             es_directivo: comp.es_directivo,
             cargo_directivo: comp.es_directivo ? comp.cargo_directivo : null,
-            fecha_registro: new Date().toISOString()
+            fecha_registro: new Date().toISOString(),
+            estado: `|${activeJornada}`
           };
 
           const { data: insertedComp, error: compErr } = await supabase
@@ -704,6 +740,7 @@ _Nota: Número para solo envío de mensajería masiva - No recibe respuestas_`;
                 cargo_directivo: (nuevoGuest.es_acompanante && nuevoGuest.es_directivo) ? nuevoGuest.cargo_directivo : null,
                 asistio: true,
                 fecha_registro: new Date().toISOString(),
+                estado: `|${activeJornada}`
               };
 
               const { data: insertedData, error: insertError } = await supabase
@@ -739,6 +776,7 @@ _Nota: Número para solo envío de mensajería masiva - No recibe respuestas_`;
                 municipio: nuevoGuest.municipio,
                 parroquia: nuevoGuest.parroquia,
                 asistio: true,
+                estado: `|${activeJornada}`,
                 es_acompanante: nuevoGuest.es_acompanante,
                 es_directivo: nuevoGuest.es_acompanante ? nuevoGuest.es_directivo : false,
                 cargo_directivo: nuevoGuest.cargo_directivo,

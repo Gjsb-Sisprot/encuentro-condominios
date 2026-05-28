@@ -35,10 +35,28 @@ export default function ModeradorPage() {
   const [mesas, setMesas] = useState<DbMesaResponse[]>([]);
   const [asistentes, setAsistentes] = useState<AsistenteInfo[]>([]);
   const [selectedMesaId, setSelectedMesaId] = useState<string | null>(null);
+  const [activeJornada, setActiveJornada] = useState<string>('Jornada General');
   
   // Search state for moderator selection
   const [modSearchQuery, setModSearchQuery] = useState('');
   const [showModDropdown, setShowModDropdown] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('active_jornada') || 'Jornada General';
+      setActiveJornada(saved);
+    }
+
+    const onJornadaChanged = (e: Event) => {
+      const customEvent = e as CustomEvent<string>;
+      setActiveJornada(customEvent.detail);
+    };
+
+    window.addEventListener('jornadaChanged', onJornadaChanged);
+    return () => {
+      window.removeEventListener('jornadaChanged', onJornadaChanged);
+    };
+  }, []);
 
   // Fetch data from database
   async function fetchData() {
@@ -53,13 +71,23 @@ export default function ModeradorPage() {
       if (mesasData) setMesas(mesasData);
 
       // Fetch assistants and join with assistant_mesa
-      const { data: astData, error: astErr } = await supabase
+      let query = supabase
         .from('asistentes')
         .select(`
           id, nombre, cedula, telefono, condominio, municipio, parroquia, asistio, estado,
           es_acompanante, es_directivo, cargo_directivo,
           asistente_mesa ( mesa_id )
         `);
+
+      if (activeJornada) {
+        if (activeJornada === 'Jornada General') {
+          query = query.or('estado.is.null,estado.not.ilike.%|%,estado.ilike.%|Jornada General');
+        } else {
+          query = query.ilike('estado', `%|${activeJornada}`);
+        }
+      }
+
+      const { data: astData, error: astErr } = await query;
 
       if (astErr) throw astErr;
 
@@ -132,11 +160,11 @@ export default function ModeradorPage() {
       supabase.removeChannel(channelAsistentes);
       supabase.removeChannel(channelAsistenteMesa);
     };
-  }, []);
+  }, [activeJornada]);
 
   // Find moderator for a given mesa ID
   const getModeratorForMesa = (mesaId: string): AsistenteInfo | undefined => {
-    return asistentes.find(a => a.estado === `MODERADOR_MESA_${mesaId}`);
+    return asistentes.find(a => (a.estado || '').split('|')[0] === `MODERADOR_MESA_${mesaId}`);
   };
 
   // Assign moderator to selected mesa
@@ -149,14 +177,14 @@ export default function ModeradorPage() {
       if (prevMod) {
         await supabase
           .from('asistentes')
-          .update({ estado: null })
+          .update({ estado: `|${activeJornada}` })
           .eq('id', prevMod.id);
       }
 
       // 2. Set new moderator
       await supabase
         .from('asistentes')
-        .update({ estado: `MODERADOR_MESA_${selectedMesaId}` })
+        .update({ estado: `MODERADOR_MESA_${selectedMesaId}|${activeJornada}` })
         .eq('id', astId);
 
       setModSearchQuery('');
@@ -175,7 +203,7 @@ export default function ModeradorPage() {
     try {
       await supabase
         .from('asistentes')
-        .update({ estado: null })
+        .update({ estado: `|${activeJornada}` })
         .eq('id', astId);
       await fetchData();
     } catch (err) {
@@ -188,14 +216,15 @@ export default function ModeradorPage() {
   // Toggle verified attendance
   const handleToggleVerification = async (ast: AsistenteInfo) => {
     if (!selectedMesaId) return;
-    const isCurrentlyVerified = ast.estado === 'VERIFICADO' || ast.estado === `MODERADOR_MESA_${selectedMesaId}`;
+    const astStatus = (ast.estado || '').split('|')[0];
+    const isCurrentlyVerified = astStatus === 'VERIFICADO' || astStatus === `MODERADOR_MESA_${selectedMesaId}`;
     
     // Moderators are always verified, don't allow modifying verification directly unless moderator status changes
-    if (ast.estado === `MODERADOR_MESA_${selectedMesaId}`) return;
+    if (astStatus === `MODERADOR_MESA_${selectedMesaId}`) return;
 
     setActionLoading(true);
     try {
-      const nextEstado = isCurrentlyVerified ? null : 'VERIFICADO';
+      const nextEstado = isCurrentlyVerified ? `|${activeJornada}` : `VERIFICADO|${activeJornada}`;
       await supabase
         .from('asistentes')
         .update({ estado: nextEstado })
@@ -218,7 +247,10 @@ export default function ModeradorPage() {
   // Assumed arrived if asistio is true
   const totalArrived = assistantsInSelectedMesa.filter(a => a.asistio).length;
   const totalStayed = assistantsInSelectedMesa.filter(
-    a => a.asistio && (a.estado === 'VERIFICADO' || a.estado === `MODERADOR_MESA_${selectedMesaId}`)
+    a => {
+      const statusPart = (a.estado || '').split('|')[0];
+      return a.asistio && (statusPart === 'VERIFICADO' || statusPart === `MODERADOR_MESA_${selectedMesaId}`);
+    }
   ).length;
   const totalLeft = totalArrived - totalStayed;
   const retentionRate = totalArrived > 0 ? Math.round((totalStayed / totalArrived) * 100) : 0;
@@ -463,8 +495,9 @@ export default function ModeradorPage() {
                             </thead>
                             <tbody>
                               {assistantsInSelectedMesa.map((ast) => {
-                                const isModerator = ast.estado === `MODERADOR_MESA_${selectedMesaId}`;
-                                const isVerified = isModerator || ast.estado === 'VERIFICADO';
+                                const statusPart = (ast.estado || '').split('|')[0];
+                                const isModerator = statusPart === `MODERADOR_MESA_${selectedMesaId}`;
+                                const isVerified = isModerator || statusPart === 'VERIFICADO';
 
                                 return (
                                   <tr 
