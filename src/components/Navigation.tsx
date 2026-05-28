@@ -57,11 +57,15 @@ export default function Navigation() {
     if (typeof window !== 'undefined') {
       setUserName(localStorage.getItem('user_name'));
     }
+  }, [pathname]);
+
+  useEffect(() => {
     fetchJornadas();
 
     // Subscribe to changes in asistentes to reload jornadas list if new ones are added
+    const channelId = `navigation-asistentes-${Date.now()}`;
     const channel = supabase
-      .channel('navigation-asistentes-changes')
+      .channel(channelId)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'asistentes' },
@@ -74,7 +78,7 @@ export default function Navigation() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [pathname]);
+  }, []);
 
   const handleJornadaChange = (value: string) => {
     setActiveJornada(value);
