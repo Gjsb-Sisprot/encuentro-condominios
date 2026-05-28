@@ -256,7 +256,7 @@ export default function JornadasContent() {
         if (insertPayload.length > 0) {
           const { data: insertedList, error: insertErr } = await supabase
             .from('asistentes')
-            .insert(insertPayload)
+            .upsert(insertPayload, { onConflict: 'cedula' })
             .select('id, cedula');
 
           if (insertErr) throw insertErr;
