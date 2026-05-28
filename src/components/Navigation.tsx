@@ -13,8 +13,6 @@ export default function Navigation() {
   const pathname = usePathname();
   const router = useRouter();
   const [userName, setUserName] = useState<string | null>(null);
-  const [jornadas, setJornadas] = useState<string[]>([]);
-  const [activeJornada, setActiveJornada] = useState<string>('');
 
   // Fetch unique jornadas from DB
   async function fetchJornadas() {
@@ -32,19 +30,16 @@ export default function Navigation() {
             return parts[1] || 'Jornada General';
           })
         )).sort();
-        setJornadas(uniqueJorns);
 
         // Set default active jornada if not set
         const saved = localStorage.getItem('active_jornada');
         if (saved && uniqueJorns.includes(saved)) {
-          setActiveJornada(saved);
+          // Keep saved jornada
         } else if (uniqueJorns.length > 0) {
           const defaultJornada = uniqueJorns[uniqueJorns.length - 1]; // Latest
-          setActiveJornada(defaultJornada);
           localStorage.setItem('active_jornada', defaultJornada);
           window.dispatchEvent(new CustomEvent('jornadaChanged', { detail: defaultJornada }));
         } else {
-          setActiveJornada('Jornada General');
           localStorage.setItem('active_jornada', 'Jornada General');
         }
       }
@@ -80,11 +75,7 @@ export default function Navigation() {
     };
   }, []);
 
-  const handleJornadaChange = (value: string) => {
-    setActiveJornada(value);
-    localStorage.setItem('active_jornada', value);
-    window.dispatchEvent(new CustomEvent('jornadaChanged', { detail: value }));
-  };
+
 
   const handleLogout = async () => {
     try {
@@ -148,23 +139,6 @@ export default function Navigation() {
           </div>
           
           <div className="flex flex-wrap items-center gap-2 md:gap-4 ml-auto md:ml-0">
-            {/* Jornada Selector Dropdown */}
-            <div className="flex items-center gap-1.5 bg-[#0b111e] px-2.5 py-1.5 rounded-lg border border-[#1e2d4a]">
-              <Calendar className="h-3.5 w-3.5 text-[#60c0ea]" />
-              <select
-                value={activeJornada}
-                onChange={e => handleJornadaChange(e.target.value)}
-                className="bg-transparent text-white text-xs font-bold focus:outline-none cursor-pointer uppercase pr-2"
-              >
-                {jornadas.length === 0 ? (
-                  <option value="Jornada General" className="bg-[#111a2e] text-white">JORNADA GENERAL</option>
-                ) : (
-                  jornadas.map(j => (
-                    <option key={j} value={j} className="bg-[#111a2e] text-white">{j.toUpperCase()}</option>
-                  ))
-                )}
-              </select>
-            </div>
 
             <div className="flex flex-wrap items-center gap-1.5">
               {menuItems.map((item) => {

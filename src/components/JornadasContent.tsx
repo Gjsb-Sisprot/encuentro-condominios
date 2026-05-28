@@ -352,6 +352,12 @@ export default function JornadasContent() {
     }
   };
 
+  const handleSelectJornada = (jName: string) => {
+    localStorage.setItem('active_jornada', jName);
+    setActiveJornada(jName);
+    window.dispatchEvent(new CustomEvent('jornadaChanged', { detail: jName }));
+  };
+
   return (
     <div className="space-y-8 animate-fade-in">
         
@@ -533,7 +539,17 @@ export default function JornadasContent() {
                           <td className="py-4 px-4 text-center font-mono text-purple-400 font-bold">
                             {j.totalVerificados}
                           </td>
-                          <td className="py-4 px-4 text-center">
+                          <td className="py-4 px-4 flex items-center justify-center gap-2">
+                            {!isActive && (
+                              <button
+                                disabled={loading}
+                                onClick={() => handleSelectJornada(j.nombre)}
+                                className="px-2.5 py-1 text-[10px] bg-[#004e74] hover:bg-[#005e8c] text-white rounded-lg font-bold uppercase transition-all"
+                                title="Activar esta jornada"
+                              >
+                                Activar
+                              </button>
+                            )}
                             <button
                               disabled={loading || j.nombre === 'Jornada General'}
                               onClick={() => handleDeleteJornada(j.nombre)}
