@@ -126,6 +126,12 @@ interface CompanionInput {
   cargo_directivo: string;
 }
 
+interface RegisteredCondominio {
+  condominio: string;
+  municipio: string;
+  parroquia: string | null;
+}
+
 export default function RegistroPage() {
   const [cedula, setCedula] = useState('');
   const [loading, setLoading] = useState(false);
@@ -133,6 +139,7 @@ export default function RegistroPage() {
   
   // Data lists
   const [mesas, setMesas] = useState<DbMesaResponse[]>([]);
+  const [registeredCondominios, setRegisteredCondominios] = useState<RegisteredCondominio[]>([]);
   
   // Step workflow states
   const [foundGuest, setFoundGuest] = useState<AsistenteInfo | null>(null);
@@ -175,7 +182,7 @@ export default function RegistroPage() {
   const cardRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
-  // Fetch mesas on load
+  // Fetch mesas and registered condominios on load
   useEffect(() => {
     async function fetchMesas() {
       const { data, error } = await supabase
@@ -189,7 +196,38 @@ export default function RegistroPage() {
         console.error('Error fetching mesas:', error);
       }
     }
+
+    async function fetchCondominios() {
+      const { data, error } = await supabase
+        .from('asistentes')
+        .select('condominio, municipio, parroquia')
+        .not('condominio', 'is', null);
+      if (data) {
+        const uniqueMap = new Map<string, RegisteredCondominio>();
+        (data as { condominio: string | null; municipio: string | null; parroquia: string | null }[]).forEach((item) => {
+          const cond = (item.condominio || '').trim();
+          const muni = (item.municipio || '').trim();
+          const parr = (item.parroquia || '').trim();
+          if (cond) {
+            const key = `${cond.toLowerCase()}|${parr.toLowerCase()}|${muni.toLowerCase()}`;
+            if (!uniqueMap.has(key)) {
+              uniqueMap.set(key, {
+                condominio: cond,
+                municipio: muni,
+                parroquia: parr || null,
+              });
+            }
+          }
+        });
+        setRegisteredCondominios(Array.from(uniqueMap.values()));
+      }
+      if (error) {
+        console.error('Error fetching condominios:', error);
+      }
+    }
+
     fetchMesas();
+    fetchCondominios();
   }, []);
 
   const REGISTRO_SELECT = `
@@ -794,7 +832,8 @@ _Nota: Número para solo envío de mensajería masiva - No recibe respuestas_`;
                   setNuevoGuest({ 
                     ...nuevoGuest, 
                     municipio: newMuni,
-                    parroquia: defaultParroquia
+                    parroquia: defaultParroquia,
+                    condominio: ''
                   });
                 }}
                 className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#60c0ea]"
@@ -809,7 +848,7 @@ _Nota: Número para solo envío de mensajería masiva - No recibe respuestas_`;
               <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Parroquia *</label>
               <select
                 value={nuevoGuest.parroquia}
-                onChange={e => setNuevoGuest({ ...nuevoGuest, parroquia: e.target.value })}
+                onChange={e => setNuevoGuest({ ...nuevoGuest, parroquia: e.target.value, condominio: '' })}
                 className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#60c0ea]"
               >
                 {(PARROQUIAS_POR_MUNICIPIO[nuevoGuest.municipio] || []).map(p => (
@@ -820,14 +859,23 @@ _Nota: Número para solo envío de mensajería masiva - No recibe respuestas_`;
 
             <div>
               <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Nombre del Condominio *</label>
-              <input
-                type="text"
+              <select
                 required
                 value={nuevoGuest.condominio}
                 onChange={e => setNuevoGuest({ ...nuevoGuest, condominio: e.target.value })}
                 className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#60c0ea]"
-                placeholder="Ej. Condominio El Paraíso"
-              />
+              >
+                <option value="">Selecciona un condominio...</option>
+                {registeredCondominios
+                  .filter(c => 
+                    c.municipio.toLowerCase() === (nuevoGuest.municipio || '').toLowerCase() &&
+                    (c.parroquia || '').toLowerCase() === (nuevoGuest.parroquia || '').toLowerCase()
+                  )
+                  .map(c => (
+                    <option key={c.condominio} value={c.condominio}>{c.condominio}</option>
+                  ))
+                }
+              </select>
             </div>
 
             <div>
@@ -984,7 +1032,7 @@ _Nota: Número para solo envío de mensajería masiva - No recibe respuestas_`;
                 />
               </div>
 
-              <div>
+               <div>
                 <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Municipio *</label>
                 <select
                   value={editingGuestData.municipio}
@@ -994,7 +1042,8 @@ _Nota: Número para solo envío de mensajería masiva - No recibe respuestas_`;
                     setEditingGuestData({ 
                       ...editingGuestData, 
                       municipio: newMuni,
-                      parroquia: defaultParroquia
+                      parroquia: defaultParroquia,
+                      condominio: ''
                     });
                   }}
                   className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#60c0ea]"
@@ -1009,7 +1058,7 @@ _Nota: Número para solo envío de mensajería masiva - No recibe respuestas_`;
                 <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Parroquia *</label>
                 <select
                   value={editingGuestData.parroquia}
-                  onChange={e => setEditingGuestData({ ...editingGuestData, parroquia: e.target.value })}
+                  onChange={e => setEditingGuestData({ ...editingGuestData, parroquia: e.target.value, condominio: '' })}
                   className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#60c0ea]"
                 >
                   {(PARROQUIAS_POR_MUNICIPIO[editingGuestData.municipio] || []).map(p => (
@@ -1020,13 +1069,23 @@ _Nota: Número para solo envío de mensajería masiva - No recibe respuestas_`;
 
               <div>
                 <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Condominio *</label>
-                <input
-                  type="text"
+                <select
                   required
                   value={editingGuestData.condominio}
                   onChange={e => setEditingGuestData({ ...editingGuestData, condominio: e.target.value })}
                   className="w-full bg-[#1a2640] border border-[#1e2d4a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#60c0ea]"
-                />
+                >
+                  <option value="">Selecciona un condominio...</option>
+                  {registeredCondominios
+                    .filter(c => 
+                      c.municipio.toLowerCase() === (editingGuestData.municipio || '').toLowerCase() &&
+                      (c.parroquia || '').toLowerCase() === (editingGuestData.parroquia || '').toLowerCase()
+                    )
+                    .map(c => (
+                      <option key={c.condominio} value={c.condominio}>{c.condominio}</option>
+                    ))
+                  }
+                </select>
               </div>
 
               <div>
