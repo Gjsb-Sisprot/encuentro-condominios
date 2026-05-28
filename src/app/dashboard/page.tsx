@@ -238,6 +238,7 @@ export default function DashboardPage() {
        supabase.removeChannel(channelAsistentes);
        supabase.removeChannel(channelAsistenteMesa);
      };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
    }, [activeJornada]);
 
    useEffect(() => {

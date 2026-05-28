@@ -199,15 +199,25 @@ export default function JornadasContent() {
       setProgressMsg('Respaldando e indexando cédulas de jornadas anteriores...');
       setProgressPercent(30);
 
-      // Get all current assistants who have a clean cedula (doesn't contain dash-jornadaName)
-      const { data: currentAsistentes, error: curErr } = await supabase
+      // Get all current assistants to check which ones have a clean cedula (no session suffix)
+      const { data: allAsistentes, error: curErr } = await supabase
         .from('asistentes')
-        .select('id, cedula, estado')
-        .not('cedula', 'like', '%-%');
+        .select('id, cedula, estado');
 
       if (curErr) throw curErr;
 
-      if (currentAsistentes && currentAsistentes.length > 0) {
+      const currentAsistentes = (allAsistentes || []).filter(ast => {
+        const parts = ast.cedula.split('-');
+        if (parts.length <= 2) {
+          if (parts.length === 2) {
+            return /^\d+$/.test(parts[1]);
+          }
+          return /^\d+$/.test(parts[0]);
+        }
+        return false;
+      });
+
+      if (currentAsistentes.length > 0) {
         const batchUpdates = currentAsistentes.map(async (ast) => {
           const parts = (ast.estado || '').split('|');
           const jName = parts[1] || 'Jornada General';
@@ -262,7 +272,11 @@ export default function JornadasContent() {
         setProgressMsg(`Importando lote ${i + 1} de ${totalBatches}...`);
         setProgressPercent(50 + Math.round((i / totalBatches) * 45));
 
-        const insertPayload = batchRows.map(({ _rawRow, ...rest }) => rest);
+        const insertPayload = batchRows.map((item) => {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { _rawRow, ...rest } = item;
+          return rest;
+        });
 
         if (insertPayload.length > 0) {
           const { data: insertedList, error: insertErr } = await supabase

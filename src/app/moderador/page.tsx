@@ -160,6 +160,7 @@ export default function ModeradorPage() {
       supabase.removeChannel(channelAsistentes);
       supabase.removeChannel(channelAsistenteMesa);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeJornada]);
 
   // Find moderator for a given mesa ID
