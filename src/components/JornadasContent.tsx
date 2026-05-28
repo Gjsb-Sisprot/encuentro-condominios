@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import Navigation from '@/components/Navigation';
 import { 
   Calendar, Play, Users, CheckCircle, 
   AlertCircle, Trash2, ArrowRight, FileSpreadsheet, Loader2 
@@ -354,10 +353,7 @@ export default function JornadasContent() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0b111e] text-white">
-      <Navigation />
-      
-      <main className="max-w-7xl mx-auto p-4 md:p-8 space-y-8 animate-fade-in">
+    <div className="space-y-8 animate-fade-in">
         
         {/* Header */}
         <div className="flex flex-col gap-2 border-b border-[#1e2d4a] pb-6">
@@ -564,8 +560,6 @@ export default function JornadasContent() {
           </div>
 
         </div>
-
-      </main>
     </div>
   );
 }
